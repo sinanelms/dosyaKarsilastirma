@@ -1,0 +1,30 @@
+[package]
+name = "uyap-dosya-karsilastirma"
+version = "1.0.0"
+description = "UYAP Dosya Karşılaştırma - Cumhuriyet Başsavcılığı Analiz Modülü"
+authors = ["you"]
+edition = "2021"
+
+[lib]
+name = "uyap_dosya_karsilastirma_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Boyut optimizasyonu için profil ayarları
+[profile.dev]
+incremental = true
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

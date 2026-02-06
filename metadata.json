@@ -1,0 +1,5 @@
+{
+  "name": "UYAP Dosya Karşılaştırma",
+  "description": "UYAP veya Excel'den alınan taraf dosya bilgilerini karşılaştırarak müşteki/şüpheli ortak dosyalarını tespit eden analiz aracı.",
+  "requestFramePermissions": []
+}
