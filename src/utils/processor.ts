@@ -18,6 +18,20 @@ const createLog = (message: string, type: LogEntry['type'] = 'INFO'): LogEntry =
 // Helper to check if a string is empty or whitespace
 const isEmpty = (str: string | undefined | null) => !str || str.trim().length === 0;
 
+/**
+ * Köşeli parantezleri ve gereksiz boşlukları temizler.
+ * Kapalı dosyalardaki [Suç Adı] formatını düzeltmek için kullanılır.
+ * @param value - Temizlenecek string değer
+ * @returns Temizlenmiş değer
+ * @example cleanBrackets('[Silahla Tehdit]') => 'Silahla Tehdit'
+ */
+const cleanBrackets = (value: string): string => {
+    if (!value) return '';
+    return value
+        .replace(/^\[|\]$/g, '') // Baştan ve sondan köşeli parantezleri kaldır
+        .trim();
+};
+
 // Helper to detect if a line is a header row
 const isHeaderRow = (line: string): boolean => {
     const lower = line.toLowerCase();
@@ -51,7 +65,7 @@ const smartMerge = (val1: string, val2: string): string => {
     if (n1.includes(n2)) return v1;
     if (n2.includes(n1)) return v2;
 
-    return `${v1} / ${v2}`;
+    return `${v1}\n• ${v2}`;
 };
 
 export const parseClipboardData = (
@@ -93,6 +107,9 @@ export const parseClipboardData = (
             let val = cols[i] ? cols[i].trim() : '';
 
             if (val.toLowerCase() === 'nan') val = '';
+
+            // Köşeli parantez temizleme (kapalı dosyalar için)
+            val = cleanBrackets(val);
 
             if (MERGE_FIX_COLUMNS.includes(header)) {
                 if (isEmpty(val) && lastValidValues[header]) {
@@ -239,4 +256,4 @@ export const compareDatasets = (
 };
 
 // Export helper functions for testing
-export { generateId, createLog, isEmpty, isHeaderRow, smartMerge };
+export { generateId, createLog, isEmpty, isHeaderRow, smartMerge, cleanBrackets };

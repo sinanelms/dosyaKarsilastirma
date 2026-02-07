@@ -25,13 +25,36 @@ export const MERGE_FIX_COLUMNS = [
     'Dosya No',
     'Sıfatı',
     'Vekilleri',
+    'Dava Türleri',
+    'Dava Konusu',
+    'İlamat Numaraları',
+    'Suçu',
+    'Suç Tarihi',
+    'Karar Türü',
+    'Kesinleşme Tarihi',
+    'Kesinleşme Türü',
+    'Açıklama',
 ];
 
-export const VALID_DOSYA_TURU = ['Soruşturma Dosyası', 'Ceza Dava Dosyası', 'CBS İhbar Dosyası'];
+export const VALID_DOSYA_TURU = [
+    'Soruşturma Dosyası',
+    'Ceza Dava Dosyası',
+    'CBS İhbar Dosyası',
+    'CBS İlam Dosyası',
+    'CBS Denetimli Serbestlik Dosyası',
+    'CBS Yakalama Dosyası',
+    'CBS Tasra İlam Dosyası',
+    'İdari Yaptırım Dosyası',
+    'Denetimli Serbestlik Dosyası',
+];
 
 export const REPLACEMENTS: Record<string, Record<string, string>> = {
     'Birim Adı': { 'Cumhuriyet Başsavcılığı': 'CBS' },
-    'Dosya Türü': { 'CBS Sorusturma Dosyası': 'Soruşturma Dosyası' },
+    'Dosya Türü': {
+        'CBS Sorusturma Dosyası': 'Soruşturma Dosyası',
+        'CBS İlam Dosyası': 'CBS İlam Dosyası',
+        'CBS Denetimli Serbestlik Dosyası': 'Denetimli Serbestlik Dosyası',
+    },
 };
 
 // Keyboard shortcuts
