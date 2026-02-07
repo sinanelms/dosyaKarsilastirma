@@ -42,49 +42,63 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose,
         return chunks;
     }, [data, rowsPerPage]);
 
-    if (!isOpen) return null;
-
-    const toggleColumn = (col: string) => {
-        setSelectedColumns(prev =>
-            prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col]
-        );
-    };
-
-    // Dinamik @page stilleri
+    // Dinamik @page stilleri - hook'tan önce tanımlanmalı
     const getPageStyles = () => `
         @page {
-            size: ${orientation};
-            margin: ${margins.top}mm ${margins.right}mm ${margins.bottom}mm ${margins.left}mm;
+            size: ${orientation === 'landscape' ? 'A4 landscape' : 'A4 portrait'};
+            margin: 0;
         }
         @media print {
             html, body {
-                height: initial !important;
-                overflow: initial !important;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
+                width: 100% !important;
+                height: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: visible !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
                 background: white !important;
             }
-            .print-page-wrapper {
+            
+            /* Container transform sıfırla */
+            .print-container {
+                transform: none !important;
                 width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                gap: 0 !important;
+            }
+            
+            .print-page-wrapper {
+                width: ${orientation === 'landscape' ? '297mm' : '210mm'} !important;
+                min-height: ${orientation === 'landscape' ? '210mm' : '297mm'} !important;
                 height: auto !important;
+                padding: ${margins.top}mm ${margins.right}mm ${margins.bottom}mm ${margins.left}mm !important;
+                margin: 0 !important;
+                box-sizing: border-box !important;
                 break-after: page !important;
                 page-break-after: always !important;
                 box-shadow: none !important;
                 border: none !important;
-                margin: 0 !important;
-                padding: ${margins.top}mm ${margins.right}mm ${margins.bottom}mm ${margins.left}mm !important;
-                box-sizing: border-box !important;
+                background: white !important;
             }
+            
             .print-page-wrapper:last-child {
                 break-after: auto !important;
                 page-break-after: auto !important;
             }
-            table { border-collapse: collapse; width: 100%; }
-            th, td { border: 0.5pt solid #000; }
+            
+            table { 
+                border-collapse: collapse !important; 
+                width: 100% !important; 
+            }
+            th, td { 
+                border: 0.5pt solid #000 !important; 
+            }
         }
     `;
 
-    // react-to-print hook
+    // react-to-print hook - TÜM HOOK'LAR ERKEN RETURN'DEN ÖNCE OLMALI
     const handlePrint = useReactToPrint({
         contentRef: reportRef,
         documentTitle: title,
@@ -96,6 +110,15 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose,
             setIsPrinting(false);
         },
     });
+
+    // Erken return - hook'lardan SONRA olmalı
+    if (!isOpen) return null;
+
+    const toggleColumn = (col: string) => {
+        setSelectedColumns(prev =>
+            prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col]
+        );
+    };
 
     const pageWidth = orientation === 'landscape' ? '297mm' : '210mm';
     const pageHeight = orientation === 'landscape' ? '210mm' : '297mm';
@@ -571,6 +594,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose,
                             {/* Pages Container */}
                             <div
                                 ref={reportRef}
+                                className="print-container"
                                 style={{
                                     transform: `scale(${zoom})`,
                                     transformOrigin: 'top center',

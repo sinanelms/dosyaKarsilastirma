@@ -252,6 +252,25 @@ body {
   animation: spin 1s linear infinite;
 }
 
+/* Skeleton Loading Animation */
+@keyframes skeleton-pulse {
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.skeleton-loader {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
 /* ========================================
    Print Styles - @media print
    Dark mode'dan bağımsız yazdırma stilleri

@@ -1,12 +1,12 @@
-import React, { useState, useCallback } from 'react';
-import { Scale, FileOutput, RefreshCcw, Download, FileText, Keyboard } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { Scale, FileOutput, RefreshCcw, Download, FileText, Keyboard, HelpCircle, Loader2 } from 'lucide-react';
 import { DataInput } from './components/DataInput';
 import { ResultsTable } from './components/ResultsTable';
 import { Logger } from './components/Logger';
 import { PdfExportModal } from './components/PdfExportModal';
-import { ThemeToggle, ToastContainer, UpdateNotification } from './components/common';
+import { ThemeToggle, ToastContainer, UpdateNotification, HelpDialog } from './components/common';
 import { parseClipboardData, compareDatasets } from './utils/processor';
-import { useTheme, useToast } from './context';
+import { useToast } from './context';
 import { useKeyboardShortcuts } from './hooks';
 import { CaseRecord, LogEntry } from './types';
 import { FIXED_HEADERS } from './constants';
@@ -29,9 +29,12 @@ export default function App() {
     // PDF Modal State
     const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
     const [showShortcuts, setShowShortcuts] = useState(false);
+    const [showHelp, setShowHelp] = useState(false);
+
+    // Loading States
+    const [isComparing, setIsComparing] = useState(false);
 
     // Hooks
-    const { theme } = useTheme();
     const toast = useToast();
 
     const addLog = useCallback((log: LogEntry) => {
@@ -63,11 +66,16 @@ export default function App() {
             toast.warning('Karşılaştırma için her iki alanda da veri olmalıdır.');
             return;
         }
-        const common = compareDatasets(data1, data2, addLog);
-        setResults(common);
-        if (common.length > 0) {
-            toast.success(`${common.length} ortak kayıt bulundu!`);
-        }
+        setIsComparing(true);
+        // Simulate processing delay for better UX feedback
+        setTimeout(() => {
+            const common = compareDatasets(data1, data2, addLog);
+            setResults(common);
+            setIsComparing(false);
+            if (common.length > 0) {
+                toast.success(`${common.length} ortak kayıt bulundu!`);
+            }
+        }, 300);
     }, [data1, data2, addLog, toast]);
 
     const handleClearAll = useCallback(() => {
@@ -190,9 +198,31 @@ export default function App() {
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        {/* Help Button */}
+                        <button
+                            onClick={() => setShowHelp(true)}
+                            aria-label="Yardım ve kullanım kılavuzu"
+                            title="Yardım"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '40px',
+                                height: '40px',
+                                borderRadius: 'var(--radius-md)',
+                                border: '1px solid var(--border-primary)',
+                                backgroundColor: 'var(--bg-card)',
+                                color: 'var(--text-secondary)',
+                                cursor: 'pointer',
+                            }}
+                        >
+                            <HelpCircle size={18} />
+                        </button>
+
                         {/* Keyboard Shortcuts Help */}
                         <button
                             onClick={() => setShowShortcuts(!showShortcuts)}
+                            aria-label="Klavye kısayollarını göster"
                             title="Klavye Kısayolları"
                             style={{
                                 display: 'flex',
@@ -216,6 +246,7 @@ export default function App() {
                         {/* Clear Button */}
                         <button
                             onClick={handleClearAll}
+                            aria-label="Tüm verileri sıfırla"
                             style={{
                                 display: 'flex',
                                 alignItems: 'center',
@@ -238,7 +269,9 @@ export default function App() {
                         {/* Compare Button */}
                         <button
                             onClick={handleCompare}
-                            disabled={data1.length === 0 || data2.length === 0}
+                            disabled={data1.length === 0 || data2.length === 0 || isComparing}
+                            aria-label="Verileri karşılaştır"
+                            aria-busy={isComparing}
                             style={{
                                 display: 'flex',
                                 alignItems: 'center',
@@ -250,13 +283,22 @@ export default function App() {
                                 backgroundColor: 'var(--color-primary)',
                                 border: 'none',
                                 borderRadius: 'var(--radius-md)',
-                                cursor: data1.length === 0 || data2.length === 0 ? 'not-allowed' : 'pointer',
-                                opacity: data1.length === 0 || data2.length === 0 ? 0.5 : 1,
+                                cursor: data1.length === 0 || data2.length === 0 || isComparing ? 'not-allowed' : 'pointer',
+                                opacity: data1.length === 0 || data2.length === 0 || isComparing ? 0.7 : 1,
                                 transition: 'all var(--transition-fast)',
                             }}
                         >
-                            <FileOutput size={16} />
-                            Karşılaştır
+                            {isComparing ? (
+                                <>
+                                    <Loader2 size={16} className="animate-spin" />
+                                    İşleniyor...
+                                </>
+                            ) : (
+                                <>
+                                    <FileOutput size={16} />
+                                    Karşılaştır
+                                </>
+                            )}
                         </button>
                     </div>
                 </div>
@@ -483,6 +525,9 @@ export default function App() {
                     party1Name={name1}
                     party2Name={name2}
                 />
+
+                {/* Help Dialog */}
+                <HelpDialog isOpen={showHelp} onClose={() => setShowHelp(false)} />
             </main>
         </div>
     );
