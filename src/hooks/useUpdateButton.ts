@@ -21,11 +21,17 @@ export const useUpdateButton = (): UseUpdateButtonReturn => {
     const checkConnection = useCallback(async () => {
         // Only check connection in Tauri environment
         if (!isTauri()) {
+            console.log('🔴 useUpdateButton: Tauri ortamı değil, buton devre dışı');
             setIsConnected(false);
             return false;
         }
 
+        console.log('🔍 useUpdateButton: GitHub bağlantısı kontrol ediliyor...');
+
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 saniye timeout
+
             const response = await fetch(
                 'https://api.github.com/repos/sinanelms/dosyaKarsilastirma/releases/latest',
                 {
@@ -33,12 +39,25 @@ export const useUpdateButton = (): UseUpdateButtonReturn => {
                     headers: {
                         'Accept': 'application/vnd.github.v3+json',
                     },
+                    signal: controller.signal,
                 }
             );
+
+            clearTimeout(timeoutId);
+
+            // If 404, it means no releases yet but repo is accessible
+            if (response.status === 404) {
+                console.log('⚠️ Henüz release yok, ancak repository erişilebilir - buton yeşil');
+                setIsConnected(true);
+                return true;
+            }
+
             const connected = response.ok;
+            console.log(connected ? '✅ GitHub bağlantısı başarılı' : `⚠️ GitHub yanıt verdi ama başarısız: ${response.status}`);
             setIsConnected(connected);
             return connected;
         } catch (error) {
+            console.error('❌ useUpdateButton: GitHub bağlantı hatası:', error);
             setIsConnected(false);
             return false;
         }
