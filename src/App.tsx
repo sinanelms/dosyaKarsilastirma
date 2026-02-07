@@ -7,7 +7,7 @@ import { PdfExportModal } from './components/PdfExportModal';
 import { ThemeToggle, ToastContainer, UpdateNotification, HelpDialog } from './components/common';
 import { parseClipboardData, compareDatasets } from './utils/processor';
 import { useToast } from './context';
-import { useKeyboardShortcuts } from './hooks';
+import { useKeyboardShortcuts, useUpdateButton } from './hooks';
 import { CaseRecord, LogEntry } from './types';
 import { FIXED_HEADERS } from './constants';
 
@@ -36,6 +36,7 @@ export default function App() {
 
     // Hooks
     const toast = useToast();
+    const { isConnected, isChecking, handleUpdateClick } = useUpdateButton();
 
     const addLog = useCallback((log: LogEntry) => {
         setLogs((prev) => [...prev, log]);
@@ -198,6 +199,42 @@ export default function App() {
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        {/* Update Button */}
+                        <button
+                            onClick={handleUpdateClick}
+                            disabled={isChecking}
+                            aria-label="Güncelleme kontrolü yap"
+                            title={isConnected ? "Bağlantı başarılı - Güncelle" : "Bağlantı başarısız"}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '0.5rem',
+                                padding: '0.5rem 1rem',
+                                borderRadius: 'var(--radius-md)',
+                                border: 'none',
+                                backgroundColor: isConnected ? '#10b981' : '#ef4444',
+                                color: 'white',
+                                cursor: isChecking ? 'not-allowed' : 'pointer',
+                                fontWeight: 600,
+                                fontSize: '0.875rem',
+                                transition: 'all var(--transition-fast)',
+                                opacity: isChecking ? 0.7 : 1,
+                            }}
+                        >
+                            {isChecking ? (
+                                <>
+                                    <Loader2 size={16} className="animate-spin" />
+                                    Kontrol ediliyor...
+                                </>
+                            ) : (
+                                <>
+                                    <RefreshCcw size={16} />
+                                    Güncelle
+                                </>
+                            )}
+                        </button>
+
                         {/* Help Button */}
                         <button
                             onClick={() => setShowHelp(true)}
