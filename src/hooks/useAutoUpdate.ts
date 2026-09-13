@@ -1,131 +1,116 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useSyncExternalStore } from 'react';
+import type { Update } from '@tauri-apps/plugin-updater';
+import { isTauri } from '../lib/tauri';
 
-// Type definitions for Tauri updater
-interface UpdateInfo {
+export interface UpdateInfo {
     version: string;
     date?: string;
     body?: string;
     available: boolean;
 }
 
-interface UpdateProgress {
+export interface UpdateProgress {
     downloaded: number;
     total: number;
 }
 
-interface UseAutoUpdateReturn {
+interface UpdateState {
     updateInfo: UpdateInfo | null;
     isChecking: boolean;
     isDownloading: boolean;
     downloadProgress: UpdateProgress | null;
     error: string | null;
-    checkForUpdates: () => Promise<void>;
-    downloadAndInstall: () => Promise<void>;
-    dismissUpdate: () => void;
 }
 
-// Check if running in Tauri environment
-const isTauri = () => {
-    return typeof window !== 'undefined' && '__TAURI__' in window;
+/*
+ * Güncelleme durumu modül düzeyinde tek bir depoda tutulur. Böylece başlıktaki "Güncelle" butonu
+ * ile UpdateNotification bileşeni aynı durumu görür (önceden her biri ayrı hook kopyası kullanıyordu).
+ */
+let state: UpdateState = { updateInfo: null, isChecking: false, isDownloading: false, downloadProgress: null, error: null };
+let pendingUpdate: Update | null = null;
+let startupCheckScheduled = false;
+const listeners = new Set<() => void>();
+
+const setState = (patch: Partial<UpdateState>) => {
+    state = { ...state, ...patch };
+    listeners.forEach((listener) => listener());
 };
 
-export const useAutoUpdate = (): UseAutoUpdateReturn => {
-    const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
-    const [isChecking, setIsChecking] = useState(false);
-    const [isDownloading, setIsDownloading] = useState(false);
-    const [downloadProgress, setDownloadProgress] = useState<UpdateProgress | null>(null);
-    const [error, setError] = useState<string | null>(null);
+const subscribe = (listener: () => void) => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+};
 
-    const checkForUpdates = useCallback(async () => {
-        if (!isTauri()) {
-            setError('Güncelleme kontrolü sadece masaüstü uygulamasında çalışır.');
-            return;
-        }
+const errorMessage = (err: unknown, fallback: string) =>
+    err instanceof Error ? err.message : typeof err === 'string' ? err : fallback;
 
-        setIsChecking(true);
-        setError(null);
+export type CheckResult = 'available' | 'up-to-date' | 'error';
 
-        try {
-            // Dynamic import for Tauri modules
-            const { check } = await import('@tauri-apps/plugin-updater');
-            const update = await check();
+/** Güncelleme var mı diye bakar. */
+export const checkForUpdates = async (): Promise<CheckResult> => {
+    if (!isTauri()) {
+        setState({ error: 'Güncelleme kontrolü sadece masaüstü uygulamasında çalışır.' });
+        return 'error';
+    }
+    if (state.isChecking) return 'error';
 
-            if (update?.available) {
-                setUpdateInfo({
-                    version: update.version,
-                    date: update.date,
-                    body: update.body,
-                    available: true,
-                });
-            } else {
-                setUpdateInfo({ version: '', available: false });
+    setState({ isChecking: true, error: null });
+    try {
+        const { check } = await import('@tauri-apps/plugin-updater');
+        pendingUpdate = await check();
+        setState({
+            updateInfo: pendingUpdate
+                ? { version: pendingUpdate.version, date: pendingUpdate.date, body: pendingUpdate.body, available: true }
+                : { version: '', available: false },
+        });
+        return pendingUpdate ? 'available' : 'up-to-date';
+    } catch (err) {
+        setState({ error: errorMessage(err, 'Güncelleme kontrolü başarısız') });
+        return 'error';
+    } finally {
+        setState({ isChecking: false });
+    }
+};
+
+export const downloadAndInstall = async (): Promise<void> => {
+    if (!isTauri() || !pendingUpdate) return;
+
+    setState({ isDownloading: true, error: null });
+    try {
+        const { relaunch } = await import('@tauri-apps/plugin-process');
+        let downloaded = 0;
+        await pendingUpdate.downloadAndInstall((event) => {
+            if (event.event === 'Started') {
+                downloaded = 0;
+                setState({ downloadProgress: { downloaded: 0, total: event.data.contentLength ?? 0 } });
+            } else if (event.event === 'Progress') {
+                downloaded += event.data.chunkLength;
+                setState({ downloadProgress: { downloaded, total: state.downloadProgress?.total ?? 0 } });
+            } else if (event.event === 'Finished') {
+                setState({ downloadProgress: null });
             }
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Güncelleme kontrolü başarısız';
-            setError(message);
-        } finally {
-            setIsChecking(false);
-        }
-    }, []);
+        });
+        await relaunch();
+    } catch (err) {
+        setState({ error: errorMessage(err, 'Güncelleme indirilemedi'), isDownloading: false });
+    }
+};
 
-    const downloadAndInstall = useCallback(async () => {
-        if (!isTauri() || !updateInfo?.available) return;
+export const dismissUpdate = () => setState({ updateInfo: null, error: null });
 
-        setIsDownloading(true);
-        setError(null);
+export const useAutoUpdate = () => {
+    const snapshot = useSyncExternalStore(subscribe, () => state);
 
-        try {
-            const { check } = await import('@tauri-apps/plugin-updater');
-            const { relaunch } = await import('@tauri-apps/plugin-process');
+    // Masaüstünde açılıştan birkaç saniye sonra bir kez sessizce kontrol et.
+    if (!startupCheckScheduled && isTauri()) {
+        startupCheckScheduled = true;
+        setTimeout(() => {
+            checkForUpdates().then(() => {
+                // Açılıştaki sessiz kontrolde ağ hatası kullanıcıya gösterilmez.
+                if (!state.updateInfo?.available) setState({ error: null });
+            });
+        }, 3000);
+    }
 
-            const update = await check();
-
-            if (update) {
-                await update.downloadAndInstall((event) => {
-                    if (event.event === 'Started' && event.data.contentLength) {
-                        setDownloadProgress({ downloaded: 0, total: event.data.contentLength });
-                    } else if (event.event === 'Progress') {
-                        setDownloadProgress((prev) =>
-                            prev ? { ...prev, downloaded: prev.downloaded + event.data.chunkLength } : null
-                        );
-                    } else if (event.event === 'Finished') {
-                        setDownloadProgress(null);
-                    }
-                });
-
-                // Relaunch the app
-                await relaunch();
-            }
-        } catch (err) {
-            const message = err instanceof Error ? err.message : 'Güncelleme indirilemedi';
-            setError(message);
-            setIsDownloading(false);
-        }
-    }, [updateInfo]);
-
-    const dismissUpdate = useCallback(() => {
-        setUpdateInfo(null);
-    }, []);
-
-    // Check for updates on mount (with delay)
-    useEffect(() => {
-        if (isTauri()) {
-            const timer = setTimeout(() => {
-                checkForUpdates();
-            }, 3000); // Check 3 seconds after app start
-
-            return () => clearTimeout(timer);
-        }
-    }, [checkForUpdates]);
-
-    return {
-        updateInfo,
-        isChecking,
-        isDownloading,
-        downloadProgress,
-        error,
-        checkForUpdates,
-        downloadAndInstall,
-        dismissUpdate,
-    };
+    return { ...snapshot, checkForUpdates, downloadAndInstall, dismissUpdate };
 };
