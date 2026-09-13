@@ -1,0 +1,47 @@
+name: release
+
+# Sürüm yayınlamak için: package.json "version" alanını artırın, commit'leyin ve
+#   git tag v1.2.0 && git push origin v1.2.0
+# Oluşan taslak (draft) sürümü GitHub'da kontrol edip "Publish" edin; uygulamalar
+# latest.json üzerinden güncellemeyi görür.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - run: npm ci
+
+      - run: npm test
+
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'UYAP Dosya Karşılaştırma v__VERSION__'
+          releaseBody: 'Kurulum için aşağıdaki .exe (NSIS) veya .msi dosyasını indirin. Yüklü uygulamalar bu sürümü otomatik olarak bulur.'
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
