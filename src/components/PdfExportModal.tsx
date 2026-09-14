@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     AlertTriangle,
     CheckSquare,
@@ -25,6 +25,8 @@ import type { HeaderKey, MatchRecord, Party } from '../types';
 import { FIXED_HEADERS } from '../constants';
 import { DEFAULT_PDF_OPTIONS, PDF_FONT_LABELS, type PdfFontFamily, type PdfOptions } from '../core/pdfLayout';
 import { usePdfGenerator } from '../pdf/usePdfGenerator';
+import { printPdf } from '../pdf/printPdf';
+import { PdfPreview } from './PdfPreview';
 import { saveBinaryFile, todayStamp } from '../lib/tauri';
 import { useToast } from '../context';
 
@@ -231,7 +233,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose,
     const [activeTab, setActiveTab] = useState<'settings' | 'columns'>('settings');
     const [retryToken, setRetryToken] = useState(0);
     const [isSaving, setIsSaving] = useState(false);
-    const iframeRef = useRef<HTMLIFrameElement>(null);
+    const [printProgress, setPrintProgress] = useState<{ done: number; total: number } | null>(null);
     const toast = useToast();
 
     // Worker'a yalnız ad/kimlik gider; kişi metinleri değişse de PDF gereksiz yere yeniden üretilmez.
@@ -276,14 +278,16 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose,
         }
     };
 
-    const handlePrint = () => {
+    const handlePrint = async () => {
+        if (!pdf.bytes) return;
+        setPrintProgress({ done: 0, total: pdf.pageCount });
         try {
-            const frameWindow = iframeRef.current?.contentWindow;
-            if (!frameWindow) throw new Error('Önizleme hazır değil');
-            frameWindow.focus();
-            frameWindow.print();
-        } catch {
-            toast.info('Yazdırmak için önizleme araç çubuğundaki yazıcı simgesini kullanın.');
+            await printPdf(pdf.bytes, (done, total) => setPrintProgress({ done, total }));
+        } catch (error) {
+            console.error(error);
+            toast.error('Yazdırma hazırlanamadı. PDF\'i kaydedip bir PDF görüntüleyiciden yazdırabilirsiniz.');
+        } finally {
+            setPrintProgress(null);
         }
     };
 
@@ -551,7 +555,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose,
                                 gap: '0.75rem',
                             }}
                         >
-                            <button onClick={handlePrint} disabled={!isReady || isBusy} style={actionButtonStyle(false, !isReady || isBusy)}>
+                            <button onClick={handlePrint} disabled={!isReady || isBusy || !!printProgress} style={actionButtonStyle(false, !isReady || isBusy || !!printProgress)}>
                                 <Printer size={20} />
                                 <span style={{ fontSize: '0.75rem' }}>Yazdır</span>
                             </button>
@@ -564,21 +568,13 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose,
 
                     {/* Right Area: Real PDF Preview */}
                     <div style={{ flex: 1, backgroundColor: 'var(--bg-tertiary)', position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                        {pdf.url && (
-                            <iframe
-                                ref={iframeRef}
-                                key={pdf.url}
-                                src={`${pdf.url}#toolbar=1&navpanes=0&view=FitH`}
-                                title="PDF önizleme"
-                                style={{ flex: 1, width: '100%', border: 'none', backgroundColor: 'var(--bg-tertiary)' }}
-                            />
-                        )}
+                        <PdfPreview bytes={pdf.bytes} />
 
-                        {(isBusy || pdf.status === 'idle') && (
+                        {(isBusy || pdf.status === 'idle' || printProgress) && (
                             <div
                                 style={{
                                     position: 'absolute',
-                                    top: '1rem',
+                                    top: '4rem',
                                     left: '50%',
                                     transform: 'translateX(-50%)',
                                     zIndex: 20,
@@ -595,7 +591,9 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({ isOpen, onClose,
                                 }}
                             >
                                 <Loader2 size={16} className="animate-spin" />
-                                PDF hazırlanıyor...
+                                {printProgress
+                                    ? `Yazdırma hazırlanıyor... ${printProgress.done} / ${printProgress.total}`
+                                    : 'PDF hazırlanıyor...'}
                             </div>
                         )}
 

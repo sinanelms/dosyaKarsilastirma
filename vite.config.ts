@@ -19,7 +19,7 @@ export default defineConfig({
   // Worker'larda kullanılan paketler önceden optimize edilir; aksi hâlde `npm run dev` / `tauri dev`
   // sırasında ilk PDF/Excel işleminde Vite sayfayı yeniden yükler ve girilen veriler kaybolur.
   optimizeDeps: {
-    include: ['jspdf', 'jspdf-autotable', 'xlsx', '@tanstack/react-virtual'],
+    include: ['jspdf', 'jspdf-autotable', 'xlsx', '@tanstack/react-virtual', 'pdfjs-dist'],
   },
   worker: {
     format: 'es',

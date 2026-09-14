@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Download, FileOutput, FileText, HelpCircle, Keyboard, Loader2, RefreshCcw, Scale, UserPlus, Users } from 'lucide-react';
 import { DataInput } from './components/DataInput';
 import { ResultsTable } from './components/ResultsTable';
 import { Logger } from './components/Logger';
-import { PdfExportModal } from './components/PdfExportModal';
 import { HelpDialog, ThemeToggle, ToastContainer, UpdateNotification } from './components/common';
 import { rowsToRecords, textToRows } from './core/parse';
 import { compareParties } from './core/compare';
@@ -17,6 +16,9 @@ import type { LogEntry, MatchRecord, Party } from './types';
 import { DEFAULT_PARTY_COUNT, MAX_LOG_ENTRIES } from './constants';
 
 const PARSE_DEBOUNCE_MS = 200;
+
+// PDF motoru (jsPDF worker + pdf.js) yalnız rapor penceresi ilk açıldığında yüklenir.
+const PdfExportModal = lazy(() => import('./components/PdfExportModal').then((m) => ({ default: m.PdfExportModal })));
 
 const initialParties = () => Array.from({ length: DEFAULT_PARTY_COUNT }, (_, i) => createParty(i));
 
@@ -543,7 +545,11 @@ export default function App() {
                     <Logger logs={logs} />
                 </div>
 
-                <PdfExportModal isOpen={isPdfModalOpen} onClose={() => setIsPdfModalOpen(false)} data={results} parties={resultParties} />
+                {isPdfModalOpen && (
+                    <Suspense fallback={null}>
+                        <PdfExportModal isOpen onClose={() => setIsPdfModalOpen(false)} data={results} parties={resultParties} />
+                    </Suspense>
+                )}
 
                 <HelpDialog isOpen={showHelp} onClose={() => setShowHelp(false)} />
             </main>

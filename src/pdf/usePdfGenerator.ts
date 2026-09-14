@@ -5,15 +5,13 @@ import type { PdfWorkerRequest, PdfWorkerResponse } from './pdf.worker';
 
 export interface PdfGeneratorState {
   status: 'idle' | 'generating' | 'ready' | 'error';
-  /** Önizleme iframe'i için blob URL. */
-  url: string | null;
   bytes: ArrayBuffer | null;
   pageCount: number;
   durationMs: number;
   error: string | null;
 }
 
-const INITIAL: PdfGeneratorState = { status: 'idle', url: null, bytes: null, pageCount: 0, durationMs: 0, error: null };
+const INITIAL: PdfGeneratorState = { status: 'idle', bytes: null, pageCount: 0, durationMs: 0, error: null };
 
 /**
  * Ayarlar değiştikçe PDF'i (debounce ile) Web Worker'da yeniden üretir.
@@ -30,7 +28,6 @@ export const usePdfGenerator = (
   const [state, setState] = useState<PdfGeneratorState>(INITIAL);
   const workerRef = useRef<Worker | null>(null);
   const latestId = useRef(0);
-  const urlRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
@@ -43,10 +40,7 @@ export const usePdfGenerator = (
         setState((s) => ({ ...s, status: 'error', error: data.error }));
         return;
       }
-      const url = URL.createObjectURL(new Blob([data.pdf], { type: 'application/pdf' }));
-      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
-      urlRef.current = url;
-      setState({ status: 'ready', url, bytes: data.pdf, pageCount: data.pageCount, durationMs: data.durationMs, error: null });
+      setState({ status: 'ready', bytes: data.pdf, pageCount: data.pageCount, durationMs: data.durationMs, error: null });
     };
     worker.onerror = (event) => {
       setState((s) => ({ ...s, status: 'error', error: event.message || 'PDF oluşturucu başlatılamadı.' }));
@@ -54,8 +48,6 @@ export const usePdfGenerator = (
     return () => {
       worker.terminate();
       workerRef.current = null;
-      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
-      urlRef.current = null;
       setState(INITIAL);
     };
   }, [enabled]);
