@@ -1,14 +1,15 @@
 import { jsPDF } from 'jspdf';
-import { autoTable } from 'jspdf-autotable';
+import { autoTable, type CellDef } from 'jspdf-autotable';
 import type { MatchRecord, Party } from '../types';
 import {
-  buildTableBody,
+  buildReportRows,
   buildTableHead,
   chunkRanges,
-  PARTY_COLUMN_TITLE,
   sanitizePdfOptions,
   type PdfOptions,
+  type ReportCell,
 } from '../core/pdfLayout';
+import { drawCellLayout, layoutPartyCell, layoutStatusCell } from './cellBadges';
 
 export interface PdfFontData {
   /** TTF dosyasının base64 içeriği. */
@@ -31,6 +32,10 @@ export interface RenderPdfResult {
 
 const FOOTER_TEXT = 'UYAP Dosya Analiz Modülü';
 const FOOTER_GAP = 5; // mm: tablo alt sınırı ile altbilgi çizgisi arası
+const GRID_LINE_COLOR: [number, number, number] = [160, 170, 184];
+const GROUP_LINE_COLOR: [number, number, number] = [71, 85, 105];
+const ZEBRA_COLOR: [number, number, number] = [246, 248, 251];
+const WARNING_TEXT_COLOR: [number, number, number] = [180, 83, 9];
 
 /**
  * Raporu jsPDF ile üretir. Tarayıcı, Web Worker ve Node'da aynı şekilde çalışır.
@@ -77,6 +82,7 @@ export const renderPdf = ({ matches, parties, options: rawOptions, font, generat
 
   const head = [buildTableHead(options.columns)];
   const partyColumnWidth = Math.min(55, Math.max(28, contentWidth * 0.16));
+  const badgeFont = { family: fontFamily, size: options.fontSize };
 
   // Kısa ama bölünmemesi gereken sütunlara (ör. "2024/12345") yazı boyutuyla orantılı en az genişlik.
   const MIN_WIDTH_EM: Partial<Record<string, number>> = { 'Dosya No': 5.5, 'Dosya Durumu': 4.5, 'Birim Adı': 7, 'Suç Tarihi': 5, 'Kesinleşme Tarihi': 5 };
@@ -85,14 +91,31 @@ export const renderPdf = ({ matches, parties, options: rawOptions, font, generat
     head[0].flatMap((title, index) => (MIN_WIDTH_EM[title] ? [[index, { minCellWidth: MIN_WIDTH_EM[title]! * em + options.cellPadding * 2 }]] : []))
   );
 
+  // Birleştirilmiş hücre sayfadan uzun olursa jspdf-autotable onu bölemez; bir blok, suç satırları
+  // en fazla üç satıra sarsa bile boş bir sayfaya sığacak sayıda suçla sınırlanır.
+  const lineHeight = options.fontSize * 0.3528 * 1.15;
+  const pageBodyHeight = pageHeight - margins.top - tableBottomMargin - (2 * lineHeight + 2 * options.cellPadding);
+  const maxEntriesPerBlock = Math.max(1, Math.floor(pageBodyHeight / (3 * lineHeight + 2 * options.cellPadding)));
+
   chunkRanges(matches.length, options.rowsPerPage).forEach(([start, end], chunkIndex) => {
     if (chunkIndex > 0) {
       doc.addPage();
       cursorY = margins.top;
     }
+    const rows = buildReportRows(matches.slice(start, end), parties, options.columns, { startIndex: start, maxEntriesPerBlock });
+    // jspdf-autotable hook'larında hücrenin ham girdisi (CellDef nesnesi) üzerinden rapor hücresine ulaşılır.
+    const reportCells = new WeakMap<object, ReportCell>();
+    const body: CellDef[][] = rows.map((row) =>
+      row.cells.map((cell) => {
+        const def: CellDef = { content: cell.text, rowSpan: cell.rowSpan };
+        reportCells.set(def, cell);
+        return def;
+      })
+    );
+
     autoTable(doc, {
       head,
-      body: buildTableBody(matches.slice(start, end), parties, options.columns, start),
+      body,
       startY: cursorY,
       margin: { top: margins.top, right: margins.right, bottom: tableBottomMargin, left: margins.left },
       theme: 'grid',
@@ -106,11 +129,10 @@ export const renderPdf = ({ matches, parties, options: rawOptions, font, generat
         overflow: 'linebreak',
         valign: 'top',
         textColor: 0,
-        lineColor: 60,
+        lineColor: GRID_LINE_COLOR,
         lineWidth: 0.15,
       },
-      headStyles: { fontStyle: 'bold', fillColor: [241, 245, 249], textColor: 0, valign: 'middle' },
-      alternateRowStyles: options.zebra ? { fillColor: [248, 250, 252] } : {},
+      headStyles: { fontStyle: 'bold', fillColor: [241, 245, 249], textColor: 0, valign: 'middle', lineColor: GROUP_LINE_COLOR },
       columnStyles: {
         0: { halign: 'center', cellWidth: Math.max(7, options.fontSize * 1.3) },
         1: { cellWidth: partyColumnWidth },
@@ -118,11 +140,49 @@ export const renderPdf = ({ matches, parties, options: rawOptions, font, generat
       },
       didParseCell: (data) => {
         if (data.section !== 'body') return;
-        const title = head[0][data.column.index];
-        if (title === 'Dosya No' || (title === 'Dosya Durumu' && String(data.cell.raw).toLocaleLowerCase('tr-TR').includes('açık'))) {
-          data.cell.styles.fontStyle = 'bold';
+        const cell = reportCells.get(data.cell.raw as object);
+        const row = rows[data.row.index];
+        if (!cell || !row) return;
+        const { styles } = data.cell;
+        // Dönüşümlü renk satıra değil dosyaya göre: bir dosyanın suç satırları aynı zemindedir.
+        if (options.zebra && row.group % 2 === 1) styles.fillColor = ZEBRA_COLOR;
+        if (head[0][data.column.index] === 'Dosya No') styles.fontStyle = 'bold';
+        if (cell.unaligned) styles.textColor = WARNING_TEXT_COLOR;
+
+        if (cell.kind === 'party' && cell.roles) {
+          const layout = layoutPartyCell(doc, cell.roles, partyColumnWidth - 2 * options.cellPadding, badgeFont);
+          styles.minCellHeight = layout.height + 2 * options.cellPadding;
+          data.cell.text = [];
+        } else if (cell.kind === 'status') {
+          // Sütun genişliği henüz belli değil; metin genişlik hesabı için hücrede kalır, çizimden önce silinir.
+          styles.minCellHeight = layoutStatusCell(doc, cell.text, contentWidth, badgeFont).height + 2 * options.cellPadding;
         }
-        if (title === PARTY_COLUMN_TITLE) data.cell.styles.fontSize = Math.max(5, options.fontSize - 0.5);
+      },
+      willDrawCell: (data) => {
+        if (data.section !== 'body') return;
+        if (reportCells.get(data.cell.raw as object)?.kind === 'status') data.cell.text = [];
+      },
+      didDrawCell: (data) => {
+        if (data.section !== 'body') return;
+        const cell = reportCells.get(data.cell.raw as object);
+        const row = rows[data.row.index];
+        if (!cell || !row) return;
+        const { x, y, width } = data.cell;
+        const innerWidth = width - 2 * options.cellPadding;
+        if (cell.kind === 'party' && cell.roles) {
+          const layout = layoutPartyCell(doc, cell.roles, innerWidth, badgeFont);
+          drawCellLayout(doc, layout, x + options.cellPadding, y + options.cellPadding, innerWidth, badgeFont);
+        } else if (cell.kind === 'status') {
+          const layout = layoutStatusCell(doc, cell.text, innerWidth, badgeFont);
+          drawCellLayout(doc, layout, x + options.cellPadding, y + options.cellPadding, innerWidth, badgeFont);
+        }
+        // Dosyalar arasına kalın ayırıcı: satırın son hücresi çizildikten sonra, tablonun tüm genişliğince.
+        if (row.groupStart && data.row.index > 0 && data.column.index === data.table.columns.length - 1) {
+          const tableWidth = data.table.columns.reduce((sum, column) => sum + column.width, 0);
+          doc.setDrawColor(...GROUP_LINE_COLOR);
+          doc.setLineWidth(0.45);
+          doc.line(margins.left, y, margins.left + tableWidth, y);
+        }
       },
     });
   });

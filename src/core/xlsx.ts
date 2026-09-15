@@ -1,25 +1,59 @@
 import * as XLSX from 'xlsx';
 import { FIXED_HEADERS } from '../constants';
 import type { MatchRecord, Party } from '../types';
+import { exportValue } from './decision';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
-const cellToText = (value: unknown): string => {
-  if (value === null || value === undefined) return '';
-  if (value instanceof Date) {
-    // SheetJS tarihleri varsayılan olarak UTC kabul eder.
-    return `${pad(value.getUTCDate())}.${pad(value.getUTCMonth() + 1)}.${value.getUTCFullYear()}`;
+/**
+ * Hücreyi metne çevirir. Tarih biçimli sayılar Excel seri numarasından doğrudan gün.ay.yıl yapılır;
+ * JS Date'e çevrilmez, çünkü o dönüşüm saat dilimine göre tarihi bir gün geriye kaydırabiliyordu
+ * (Excel'de "03.01.2024 00:00:00" → "02.01.2024").
+ */
+const cellToText = (cell: XLSX.CellObject | undefined): string => {
+  if (!cell || cell.v === null || cell.v === undefined) return '';
+  if (cell.t === 'n' && cell.z !== undefined && XLSX.SSF.is_date(cell.z)) {
+    const date = XLSX.SSF.parse_date_code(cell.v as number);
+    if (date) return `${pad(date.d)}.${pad(date.m)}.${date.y}`;
   }
-  return String(value);
+  if (cell.t === 'd' && cell.v instanceof Date) {
+    return `${pad(cell.v.getUTCDate())}.${pad(cell.v.getUTCMonth() + 1)}.${cell.v.getUTCFullYear()}`;
+  }
+  return String(cell.v);
 };
 
-/** .xlsx/.xls dosyasının ilk sayfasını metin hücrelerinden oluşan satırlara çevirir. */
+/**
+ * .xlsx/.xls dosyasının ilk sayfasını metin hücrelerinden oluşan satırlara çevirir.
+ * Birleştirilmiş hücrelerin değeri kapsadığı her hücreye yazılır: UYAP birden çok suçlu dosyada
+ * Dosya No, Birim Adı vb. hücreleri birleştirir, suç/karar hücrelerini alt alta ayrı satıra yazar.
+ */
 export const readXlsxRows = (data: ArrayBuffer): string[][] => {
-  const workbook = XLSX.read(data, { type: 'array', cellDates: true, dense: true });
+  const workbook = XLSX.read(data, { type: 'array', cellNF: true });
   const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-  if (!firstSheet) return [];
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(firstSheet, { header: 1, raw: true, defval: null, blankrows: false });
-  return rows.map((row) => Array.from(row, cellToText));
+  if (!firstSheet?.['!ref']) return [];
+  const range = XLSX.utils.decode_range(firstSheet['!ref']);
+
+  const texts: string[][] = [];
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    const row: string[] = [];
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      row.push(cellToText(firstSheet[XLSX.utils.encode_cell({ r, c })] as XLSX.CellObject | undefined));
+    }
+    texts.push(row);
+  }
+
+  for (const merge of firstSheet['!merges'] ?? []) {
+    const value = texts[merge.s.r - range.s.r]?.[merge.s.c - range.s.c];
+    if (!value) continue;
+    for (let r = merge.s.r; r <= merge.e.r; r++) {
+      const row = texts[r - range.s.r];
+      if (!row) continue;
+      for (let c = merge.s.c; c <= merge.e.c; c++) {
+        if (!row[c - range.s.c]) row[c - range.s.c] = value;
+      }
+    }
+  }
+  return texts;
 };
 
 /** Sonuçları (kişi sıfat sütunları + tüm UYAP sütunları) .xlsx olarak üretir. */
@@ -32,7 +66,7 @@ export const buildResultsWorkbook = (
   const body = matches.map((match, index) => [
     String(index + 1),
     ...parties.map((p) => (match.roles[p.id] === null ? '—' : match.roles[p.id] || 'Belirtilmemiş')),
-    ...detailHeaders.map((h) => match[h]),
+    ...detailHeaders.map((h) => exportValue(h, match[h])),
   ]);
 
   const sheet = XLSX.utils.aoa_to_sheet([header, ...body]);

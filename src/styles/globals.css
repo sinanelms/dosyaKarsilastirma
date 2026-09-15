@@ -145,9 +145,11 @@ body {
 }
 
 /* Selection */
+/* Kişi kartı başlığı ve vurgulu alanların zemini --color-primary-light olduğundan seçim, aynı
+   açık tonla görünmez oluyordu; her iki temada da belirgin, düz renk kullanılır. */
 ::selection {
-  background-color: var(--color-primary-light);
-  color: var(--text-primary);
+  background-color: var(--color-primary);
+  color: #ffffff;
 }
 
 /* Scrollbar Styling */

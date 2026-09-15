@@ -25,6 +25,17 @@ export const BASE_COLUMNS = ['Birim Adı', 'Dosya No', 'Dosya Durumu', 'Dosya T�
  */
 export const FILL_DOWN_COLUMNS = ['Birim Adı', 'Dosya Durumu', 'Dosya Türü'] as const;
 
+/**
+ * Suç bazında satır satır (\n) ve liste öğesi öğesi (", ") birbirine karşılık gelen sütunlar.
+ * Bu sütunlar tek tek birleştirilmez, blok olarak ele alınır (bkz. core/decision.ts).
+ */
+export const CRIME_ALIGNED_COLUMNS = ['Suçu', 'Suç Tarihi', 'Karar Türü', 'Kesinleşme Tarihi', 'Kesinleşme Türü'] as const;
+
+/**
+ * Karşılaştırmaya alınan dosya türleri (REPLACEMENTS sonrası adlarla, birebir eşleşme).
+ * Listede olmayanlar bilerek dışarıda bırakılır: ör. CBS Tasra Yakalama Dosyası, Adli Tıp Dosyası,
+ * Ceza Dava Dosyası (Basit Yargılama Usulü).
+ */
 export const VALID_DOSYA_TURU = [
     'Soruşturma Dosyası',
     'Ceza Dava Dosyası',

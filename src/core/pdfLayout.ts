@@ -1,4 +1,5 @@
 import type { HeaderKey, MatchRecord, Party } from '../types';
+import { crimeEntries, exportValue, type CrimeEntry } from './decision';
 
 export type PdfFontFamily = 'NotoSans' | 'NotoSerif' | 'Roboto';
 export type PdfOrientation = 'landscape' | 'portrait';
@@ -78,19 +79,93 @@ export const chunkRanges = (count: number, perPage: number): [number, number][] 
 
 export const buildTableHead = (columns: readonly HeaderKey[]): string[] => ['#', PARTY_COLUMN_TITLE, ...columns];
 
-export const buildTableBody = (
+/** Suç bazında satır satır yazılan sütunlar; diğer sütunlar dosya düzeyindedir ve suç satırları boyunca birleştirilir. */
+export const CRIME_COLUMNS: readonly HeaderKey[] = ['Suçu', 'Suç Tarihi', 'Karar Türü', 'Kesinleşme Tarihi'];
+
+export interface PartyRole {
+  name: string;
+  /** null: kişi bu dosyada yok. '': kişi var, sıfat boş. */
+  role: string | null;
+}
+
+export interface ReportCell {
+  /** party: kişi adları ve sıfat etiketleri; status: dosya durumu etiketi; text: düz metin. */
+  kind: 'party' | 'status' | 'text';
+  /** Hücrenin düz metni (etiketli hücrelerde sütun genişliği hesabı için). */
+  text: string;
+  /** Hücrenin kapladığı satır sayısı (dosya düzeyindeki hücreler dosyanın suç satırları boyunca birleşir). */
+  rowSpan: number;
+  roles?: PartyRole[];
+  /** Suç listesi karar listesiyle eşleştirilemedi; suç ile karar yan yana olmayabilir. */
+  unaligned?: boolean;
+}
+
+export interface ReportRow {
+  /**
+   * jspdf-autotable düzeninde hücreler: üstteki birleştirilmiş hücrenin kapladığı sütunlar atlanır,
+   * bu yüzden bir dosyanın ilk satırı dışındaki satırlarda yalnız suç sütunları bulunur.
+   */
+  cells: ReportCell[];
+  /** Dosyanın rapordaki sıra no'su (0 tabanlı). */
+  group: number;
+  /** Dosyanın ilk satırı. */
+  groupStart: boolean;
+}
+
+const UNALIGNED_NOTE = '(Karar eşleştirilemedi)';
+
+const crimeCellText = (column: HeaderKey, entry: CrimeEntry | null): string => {
+  if (!entry) return '';
+  if (column === 'Suçu') return entry.crime;
+  if (column === 'Suç Tarihi') return entry.crimeDate;
+  if (column === 'Karar Türü') return entry.decision;
+  return entry.decisionDate;
+};
+
+/**
+ * Rapor tablosunun satırlarını kurar. Suç sütunlarından biri seçiliyse her suç (ve o suça verilen
+ * karar) ayrı satırdır; sıra no, taraflar ve diğer sütunlar dosyanın suç satırları boyunca birleşir.
+ * Sayfadan uzun birleştirilmiş hücre çizilemediği için çok suçlu dosya `maxEntriesPerBlock` suçluk
+ * bloklara bölünür; her blok dosya bilgilerini yeniden gösterir.
+ */
+export const buildReportRows = (
   matches: readonly MatchRecord[],
   parties: readonly Pick<Party, 'id' | 'name'>[],
   columns: readonly HeaderKey[],
-  startIndex = 0
-): string[][] =>
-  matches.map((match, i) => [
-    String(startIndex + i + 1),
-    parties
-      .map((p) => {
-        const role = match.roles[p.id];
-        return `${p.name}: ${role === null || role === undefined ? '—' : role || 'Belirtilmemiş'}`;
-      })
-      .join('\n'),
-    ...columns.map((column) => match[column] ?? ''),
-  ]);
+  { startIndex = 0, maxEntriesPerBlock = Infinity }: { startIndex?: number; maxEntriesPerBlock?: number } = {}
+): ReportRow[] => {
+  const hasCrimeColumns = columns.some((column) => CRIME_COLUMNS.includes(column));
+  const blockSize = Math.max(1, Math.floor(maxEntriesPerBlock));
+  const rows: ReportRow[] = [];
+
+  matches.forEach((match, i) => {
+    const group = startIndex + i;
+    const entries = hasCrimeColumns ? crimeEntries(match) : [];
+    const lines: (CrimeEntry | null)[] = entries.length > 0 ? entries : [null];
+    const roles: PartyRole[] = parties.map((p) => ({ name: p.name, role: match.roles[p.id] ?? null }));
+    const partyText = roles.map(({ name, role }) => `${name}: ${role === null ? '—' : role || 'Belirtilmemiş'}`).join('\n');
+
+    for (let blockStart = 0; blockStart < lines.length; blockStart += blockSize) {
+      const block = lines.slice(blockStart, blockStart + blockSize);
+      block.forEach((entry, j) => {
+        const cells: ReportCell[] = [];
+        if (j === 0) {
+          cells.push({ kind: 'text', text: String(group + 1), rowSpan: block.length });
+          cells.push({ kind: 'party', text: partyText, rowSpan: block.length, roles });
+        }
+        for (const column of columns) {
+          if (CRIME_COLUMNS.includes(column)) {
+            const unaligned = column === 'Suçu' && !!entry && !entry.aligned && !!entry.crime;
+            const text = crimeCellText(column, entry);
+            cells.push({ kind: 'text', text: unaligned ? `${text}\n${UNALIGNED_NOTE}` : text, rowSpan: 1, ...(unaligned ? { unaligned } : {}) });
+          } else if (j === 0) {
+            const text = exportValue(column, match[column] ?? '');
+            cells.push({ kind: column === 'Dosya Durumu' ? 'status' : 'text', text, rowSpan: block.length });
+          }
+        }
+        rows.push({ cells, group, groupStart: blockStart === 0 && j === 0 });
+      });
+    }
+  });
+  return rows;
+};

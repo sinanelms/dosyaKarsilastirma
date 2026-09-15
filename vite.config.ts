@@ -8,6 +8,11 @@ export default defineConfig({
     port: 3000,
     host: '127.0.0.1',
     strictPort: true,
+    // Rust tarafını Tauri CLI izler; Vite'ın `src-tauri/target` altındaki kilitli .exe/.dll
+    // dosyalarını izlemeye çalışması Windows'ta EBUSY hatasıyla dev sunucusunu çökertir.
+    watch: {
+      ignored: ['**/src-tauri/**'],
+    },
   },
   clearScreen: false,
   plugins: [react()],

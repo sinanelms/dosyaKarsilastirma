@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderPdf } from '../renderPdf';
+import { FIXED_HEADERS } from '../../constants';
+import type { HeaderKey } from '../../types';
 import { compareParties } from '../../core/compare';
 import { rowsToRecords } from '../../core/parse';
 import { DEFAULT_PDF_OPTIONS } from '../../core/pdfLayout';
@@ -50,6 +52,40 @@ describe('renderPdf', () => {
     expect(landscape.pageCount).toBeGreaterThan(1);
     expect(portrait.pageCount).toBeLessThan(landscape.pageCount);
     expect(pageCountOf(portrait.pdf)).toBe(portrait.pageCount);
+  });
+
+  it('sayfadan uzun çok suçlu dosyayı bloklara bölerek birleştirilmiş hücre uyarısı olmadan çizer', () => {
+    const crimes = Array.from({ length: 80 }, (_, i) => `Suç ${i + 1}`);
+    const match = {
+      ...(Object.fromEntries(FIXED_HEADERS.map((h) => [h, ''])) as Record<HeaderKey, string>),
+      'Birim Adı': 'İzmir CBS',
+      'Dosya No': '2020/1',
+      'Dosya Durumu': 'Kapalı',
+      'Suçu': crimes.join(', '),
+      'Karar Türü': crimes.map(() => 'Takipsizlik').join(', '),
+      _key: '2020/1',
+      roles: { a: 'Şüpheli', b: null },
+      partyCount: 1,
+    };
+    const warnings: string[] = [];
+    const log = vi.spyOn(console, 'log').mockImplementation((message: unknown) => void warnings.push(String(message)));
+    try {
+      const result = renderPdf({
+        matches: [match],
+        parties: [
+          { id: 'a', name: 'Ali Işık' },
+          { id: 'b', name: 'Ayşe Öz' },
+        ],
+        options: DEFAULT_PDF_OPTIONS,
+        font,
+        generatedAt: new Date(),
+      });
+      expect(result.pageCount).toBeGreaterThan(1);
+      expect(pageCountOf(result.pdf)).toBe(result.pageCount);
+    } finally {
+      log.mockRestore();
+    }
+    expect(warnings.filter((w) => w.includes('rowspan') || w.includes('Will not'))).toEqual([]);
   });
 
   it('fontu alt küme olarak gömer (PDF boyutu makul kalır)', () => {

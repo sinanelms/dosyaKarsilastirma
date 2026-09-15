@@ -1,4 +1,4 @@
-import { FIXED_HEADERS, VALID_DOSYA_TURU } from '../constants';
+import { CRIME_ALIGNED_COLUMNS, FIXED_HEADERS, VALID_DOSYA_TURU } from '../constants';
 import type { CaseRecord, HeaderKey, MatchRecord, Party } from '../types';
 import { applyReplacements, lowerTr, normalizeDosyaNo, smartMerge } from './normalize';
 
@@ -12,7 +12,16 @@ const cleanRecord = (record: CaseRecord): Record<HeaderKey, string> => {
   return result;
 };
 
-const isValidType = (record: Record<HeaderKey, string>) =>
+const ALIGNED: readonly HeaderKey[] = CRIME_ALIGNED_COLUMNS;
+
+/** Suç/karar bloğunun bilgi miktarı: önce dolu karar öğesi sayısı, sonra toplam metin uzunluğu. */
+const crimeBlockScore = (record: Record<HeaderKey, string>): number => {
+  const decisions = `${record['Karar Türü']},${record['Kesinleşme Tarihi']}`.split(/[,\n]/).filter((t) => t.trim()).length;
+  const length = ALIGNED.reduce((sum, header) => sum + record[header].replace(/[\s,]/g, '').length, 0);
+  return decisions * 1_000_000 + length;
+};
+
+const isValidType =(record: Record<HeaderKey, string>) =>
   !record['Dosya Türü'] || VALID_DOSYA_TURU.includes(record['Dosya Türü']);
 
 /** Dosyanın kişiler arası eşleştirme anahtarı: birim | dosya no | dosya türü. */
@@ -63,8 +72,13 @@ export const compareParties = (parties: readonly PartyInput[], minCount: number)
         byKey.set(key, match);
       } else {
         for (const header of FIXED_HEADERS) {
-          if (header === 'Birim Adı' || header === 'Dosya No' || header === 'Sıfatı') continue;
+          if (header === 'Birim Adı' || header === 'Dosya No' || header === 'Sıfatı' || ALIGNED.includes(header)) continue;
           match[header] = smartMerge(match[header], record[header]);
+        }
+        // Suç/karar sütunları satır satır hizalıdır; tek tek birleştirmek hizayı bozar. Aynı dosyanın
+        // farklı kişilerde (farklı tarihte alınmış) çıktılarından daha çok karar bilgisi olanı alınır.
+        if (crimeBlockScore(record) > crimeBlockScore(match)) {
+          for (const header of ALIGNED) match[header] = record[header];
         }
       }
 

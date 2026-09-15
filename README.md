@@ -55,17 +55,6 @@ Test, lint ve derleme:
 npm run lint && npm test && npm run build
 ```
 
-## Dokümantasyon
-
-Ayrıntılı teknik dokümanlar [`docs/`](docs/README.md) klasöründedir:
-
-- [Mimari](docs/mimari.md)
-- [Proje yapısı](docs/proje-yapisi.md)
-- [Veri işleme kuralları](docs/veri-isleme.md)
-- [PDF motoru](docs/pdf-motoru.md)
-- [Güncelleme ve sürüm yayınlama](docs/guncelleme-ve-surum.md)
-- [Geliştirme rehberi](docs/gelistirme.md)
-
 ## Teknolojiler
 
 React 19 · TypeScript · Vite · Tauri 2 · jsPDF + jspdf-autotable · SheetJS · TanStack Virtual · vitest · ESLint 9

@@ -1,8 +1,10 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
-import { AlertCircle, CheckCircle2, Clock, FileText, Gavel, Users, XCircle } from 'lucide-react';
+import { AlertCircle, CalendarDays, CheckCircle2, Clock, FileText, Gavel, Landmark, Scale, Users, XCircle } from 'lucide-react';
 import type { MatchRecord, Party } from '../types';
 import { partyColor } from '../core/party';
+import { crimeEntries, parseAciklama } from '../core/decision';
+import { roleTone, statusTone, type Tone } from '../core/tone';
 
 interface ResultsTableProps {
     data: MatchRecord[];
@@ -11,30 +13,20 @@ interface ResultsTableProps {
 
 const lower = (value: string) => value.toLocaleLowerCase('tr-TR');
 
-const getStatusStyle = (status: string) => {
-    const s = lower(status);
-    if (s.includes('açık') || s.includes('derdest')) {
-        return { backgroundColor: 'var(--color-success-bg)', color: 'var(--color-success)', borderColor: 'var(--color-success-border)' };
-    }
-    if (s.includes('kapalı') || s.includes('kesinleş')) {
-        return { backgroundColor: 'var(--color-error-bg)', color: 'var(--color-error)', borderColor: 'var(--color-error-border)' };
-    }
-    return { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)', borderColor: 'var(--border-primary)' };
+const TONE_STYLES: Record<Tone, React.CSSProperties> = {
+    success: { backgroundColor: 'var(--color-success-bg)', color: 'var(--color-success)', borderColor: 'var(--color-success-border)' },
+    danger: { backgroundColor: 'var(--color-error-bg)', color: 'var(--color-error)', borderColor: 'var(--color-error-border)' },
+    info: { backgroundColor: 'var(--color-info-bg)', color: 'var(--color-info)', borderColor: 'var(--color-info-border)' },
+    warning: { backgroundColor: 'var(--color-warning-bg)', color: 'var(--color-warning)', borderColor: 'var(--color-warning-border)' },
+    neutral: { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)', borderColor: 'var(--border-primary)' },
 };
+
+const getStatusStyle = (status: string) => TONE_STYLES[statusTone(status)];
 
 const getRoleStyle = (role?: string | null): React.CSSProperties => {
     if (!role) return { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-tertiary)', borderColor: 'var(--border-primary)' };
-    const r = lower(role);
-    if (r.includes('şüpheli') || r.includes('sanık') || r.includes('ssç') || r.includes('suça sürüklenen')) {
-        return { backgroundColor: 'var(--color-error-bg)', color: 'var(--color-error)', borderColor: 'var(--color-error-border)', fontWeight: 'bold' };
-    }
-    if (r.includes('müşteki') || r.includes('mağdur') || r.includes('katılan')) {
-        return { backgroundColor: 'var(--color-info-bg)', color: 'var(--color-info)', borderColor: 'var(--color-info-border)', fontWeight: 'bold' };
-    }
-    if (r.includes('tanık')) {
-        return { backgroundColor: 'var(--color-warning-bg)', color: 'var(--color-warning)', borderColor: 'var(--color-warning-border)' };
-    }
-    return { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-secondary)', borderColor: 'var(--border-primary)' };
+    const tone = roleTone(role);
+    return tone === 'danger' || tone === 'info' ? { ...TONE_STYLES[tone], fontWeight: 'bold' } : TONE_STYLES[tone];
 };
 
 const getDecisionIcon = (decision: string) => {
@@ -47,31 +39,43 @@ const getDecisionIcon = (decision: string) => {
     return <Clock size={14} style={{ color: 'var(--text-tertiary)' }} />;
 };
 
-/** Birleştirilmiş (alt alta \n ile ayrılmış) değerleri ayraçlı gösterir. */
-const renderContent = (text: string) => {
-    if (!text) return <span style={{ color: 'var(--text-tertiary)' }}>-</span>;
-    const parts = text.split('\n');
-    if (parts.length === 1) return <div>{text}</div>;
-    return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-            {parts.map((part, idx) => (
-                <div
-                    key={idx}
-                    style={{
-                        borderTop: idx > 0 ? '1px solid var(--border-primary)' : undefined,
-                        paddingTop: idx > 0 ? '0.25rem' : undefined,
-                        marginTop: idx > 0 ? '0.125rem' : undefined,
-                        color: idx > 0 ? 'var(--text-secondary)' : 'inherit',
-                    }}
-                >
-                    {part}
-                </div>
-            ))}
-        </div>
-    );
+const isDavaAcma = (decision: string) => lower(decision) === 'dava açma';
+
+/** Açıklama'daki mahkeme dosyası durumunun anlamı (dosyanın o anki durumu). */
+const statusDescription = (status?: string) => {
+    const s = lower(status ?? '');
+    if (s === 'kapalı') return 'Mahkeme dosyası kapalı: mahkeme karar verdi';
+    if (s === 'açık') return 'Mahkeme dosyası açık: yargılama sürüyor';
+    return `Mahkeme dosyasının şu anki durumu: ${status ?? ''}`;
+};
+
+const emptyValue = <span style={{ color: 'var(--text-tertiary)' }}>-</span>;
+
+const cellStyle: React.CSSProperties = { padding: '0.75rem', verticalAlign: 'top' };
+
+const DATE_COLUMN_WIDTH = 132;
+
+/**
+ * Suç / Tarih / Karar Türü üç sütuna yayılan tek hücrede ızgara olarak çizilir ki uzun suç adı
+ * alt satıra geçse de karar aynı hizada kalsın. Oranlar colgroup ile aynıdır (22% | DATE_COLUMN_WIDTH | 14%).
+ */
+const crimeGridStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: `minmax(0, 22fr) ${DATE_COLUMN_WIDTH}px minmax(0, 14fr)`,
+};
+
+const crimeCellStyle: React.CSSProperties = { padding: '0.5rem 0.75rem', lineHeight: 1.4, overflowWrap: 'anywhere' };
+
+const badgeStyle: React.CSSProperties = {
+    fontSize: '0.625rem',
+    padding: '0 0.375rem',
+    borderRadius: 'var(--radius-sm)',
+    border: '1px solid',
+    whiteSpace: 'nowrap',
 };
 
 const ESTIMATED_ROW_HEIGHT = 120;
+const COLUMN_COUNT = 7;
 
 const ResultRow = React.memo(function ResultRow({
     row,
@@ -85,6 +89,9 @@ const ResultRow = React.memo(function ResultRow({
     measureRef: (el: HTMLTableRowElement | null) => void;
 }) {
     const cellBorder = '1px solid var(--border-primary)';
+    const entries = crimeEntries(row);
+    const courts = parseAciklama(row['Açıklama']);
+    const lawsuit = courts.find((ref) => ref.caseNo);
     return (
         <tr ref={measureRef} data-index={index} style={{ fontSize: '0.875rem', borderBottom: cellBorder }}>
             {/* Index Column */}
@@ -175,55 +182,85 @@ const ResultRow = React.memo(function ResultRow({
                 </div>
             </td>
 
-            {/* Crime Info Column */}
-            <td style={{ padding: '0.75rem', verticalAlign: 'top', borderRight: cellBorder }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                    <div style={{ color: 'var(--text-primary)', fontWeight: 500, lineHeight: 1.4 }}>{renderContent(row['Suçu'])}</div>
-                    {row['Suç Tarihi'] && (
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'flex-start', gap: '0.25rem', marginTop: '0.25rem' }}>
-                            <Clock size={12} style={{ marginTop: '0.125rem', flexShrink: 0 }} />
-                            Suç Tarihi:{' '}
-                            <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{renderContent(row['Suç Tarihi'])}</span>
-                        </div>
-                    )}
-                </div>
-            </td>
-
-            {/* Decision & Status Column */}
-            <td style={{ padding: '0.75rem', verticalAlign: 'top' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {row['Karar Türü'] ? (
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-                            <div style={{ marginTop: '0.125rem' }}>{getDecisionIcon(row['Karar Türü'])}</div>
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>{renderContent(row['Karar Türü'])}</div>
-                                {row['Kesinleşme Tarihi'] && (
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--color-success)', marginTop: '0.125rem', display: 'flex', alignItems: 'flex-start', gap: '0.25rem' }}>
-                                        <CheckCircle2 size={10} style={{ marginTop: '0.25rem', flexShrink: 0 }} />
-                                        Kesinleşme: {renderContent(row['Kesinleşme Tarihi'])}
-                                    </div>
+            {/* Suç / Tarih / Karar Türü — suç bazında satır satır hizalı; ızgara sütunları colgroup ile aynı oranda */}
+            <td colSpan={3} style={{ padding: 0, verticalAlign: 'top', borderRight: cellBorder }}>
+                {entries.length > 0 ? (
+                    entries.map((entry, i) => (
+                        <div
+                            key={i}
+                            style={{ ...crimeGridStyle, borderTop: i > 0 ? '1px dashed var(--border-primary)' : undefined }}
+                            title={entry.aligned ? undefined : 'Suç listesi karar listesiyle eşleştirilemedi; suç ve karar yan yana olmayabilir.'}
+                        >
+                            <div style={{ ...crimeCellStyle, borderRight: cellBorder, color: 'var(--text-primary)', fontWeight: 500 }}>
+                                {entry.crime || emptyValue}
+                                {!entry.aligned && i === 0 && (
+                                    <span style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 400, color: 'var(--color-warning)' }}>Karar eşleştirilemedi</span>
+                                )}
+                            </div>
+                            <div style={{ ...crimeCellStyle, borderRight: cellBorder, fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                                {entry.decisionDate || (entry.crimeDate ? null : emptyValue)}
+                                {entry.crimeDate && (
+                                    <span title="Suç Tarihi" style={{ display: 'block', fontFamily: 'var(--font-sans)', fontSize: '0.6875rem', color: 'var(--text-tertiary)' }}>
+                                        Suç: <span style={{ fontFamily: 'var(--font-mono)' }}>{entry.crimeDate}</span>
+                                    </span>
+                                )}
+                            </div>
+                            <div style={{ ...crimeCellStyle, display: 'flex', alignItems: 'flex-start', gap: '0.375rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                {entry.decision ? (
+                                    <>
+                                        <span style={{ flexShrink: 0, display: 'flex', marginTop: '0.1875rem' }}>{getDecisionIcon(entry.decision)}</span>
+                                        <span>
+                                            {entry.decision}
+                                            {/* Dava açılan suç, Açıklama'daki mahkeme dosyasında görülür (dosya başına tek mahkeme). */}
+                                            {isDavaAcma(entry.decision) && lawsuit && (
+                                                <span
+                                                    title={`${lawsuit.court} ${lawsuit.caseNo} — ${statusDescription(lawsuit.status)}`}
+                                                    style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', flexWrap: 'wrap', marginTop: '0.125rem', fontWeight: 400 }}
+                                                >
+                                                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6875rem', color: 'var(--text-secondary)' }}>↳ {lawsuit.caseNo}</span>
+                                                    {lawsuit.status && <span style={{ ...badgeStyle, ...getStatusStyle(lawsuit.status) }}>{lawsuit.status}</span>}
+                                                </span>
+                                            )}
+                                        </span>
+                                    </>
+                                ) : (
+                                    <span style={{ color: 'var(--text-tertiary)', fontWeight: 400, fontSize: '0.75rem', fontStyle: 'italic' }}>Karar yok</span>
                                 )}
                             </div>
                         </div>
-                    ) : (
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Karar bilgisi yok</div>
-                    )}
+                    ))
+                ) : (
+                    <div style={crimeGridStyle}>
+                        <div style={{ ...crimeCellStyle, borderRight: cellBorder }}>{emptyValue}</div>
+                        <div style={{ ...crimeCellStyle, borderRight: cellBorder }}>{emptyValue}</div>
+                        <div style={crimeCellStyle}>{emptyValue}</div>
+                    </div>
+                )}
+            </td>
 
-                    {row['Açıklama'] && (
-                        <div
-                            style={{
-                                fontSize: '0.6875rem',
-                                color: 'var(--text-tertiary)',
-                                fontStyle: 'italic',
-                                borderLeft: '2px solid var(--border-secondary)',
-                                paddingLeft: '0.5rem',
-                                marginTop: '0.25rem',
-                            }}
-                        >
-                            {renderContent(row['Açıklama'])}
-                        </div>
-                    )}
-                </div>
+            {/* Açıklama Column */}
+            <td style={cellStyle}>
+                {courts.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        {courts.map((ref, i) => (
+                            <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '0.125rem', lineHeight: 1.35 }}>
+                                <span style={{ color: 'var(--text-primary)', fontSize: '0.8125rem' }}>{ref.court}</span>
+                                {ref.caseNo && (
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', flexWrap: 'wrap' }}>
+                                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{ref.caseNo}</span>
+                                        {ref.status && (
+                                            <span title={statusDescription(ref.status)} style={{ ...badgeStyle, ...getStatusStyle(ref.status) }}>
+                                                {ref.status}
+                                            </span>
+                                        )}
+                                    </span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    emptyValue
+                )}
             </td>
         </tr>
     );
@@ -290,12 +327,14 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({ data, parties }) => 
             }}
         >
             <div ref={tableRef} style={{ overflowX: 'auto' }} className="custom-scrollbar">
-                <table style={{ width: '100%', minWidth: '960px', textAlign: 'left', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                <table style={{ width: '100%', minWidth: '1120px', textAlign: 'left', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                     <colgroup>
-                        <col style={{ width: '56px' }} />
-                        <col style={{ width: '24%' }} />
-                        <col style={{ width: '20%' }} />
-                        <col style={{ width: '25%' }} />
+                        <col style={{ width: '48px' }} />
+                        <col style={{ width: '19%' }} />
+                        <col style={{ width: '15%' }} />
+                        <col style={{ width: '22%' }} />
+                        <col style={{ width: DATE_COLUMN_WIDTH }} />
+                        <col style={{ width: '14%' }} />
                         <col />
                     </colgroup>
                     <thead>
@@ -313,12 +352,25 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({ data, parties }) => 
                             </th>
                             <th style={headerCell}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <Gavel size={14} /> SUÇ & TARİH
+                                    <Scale size={14} /> SUÇ
+                                </div>
+                            </th>
+                            <th
+                                style={headerCell}
+                                title="Kararın verildiği tarih (UYAP çıktısında 'Kesinleşme Tarihi' adlı sütun; değerler karar tarihidir). Varsa suç tarihi de gösterilir."
+                            >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap' }}>
+                                    <CalendarDays size={14} /> KARAR TARİHİ
+                                </div>
+                            </th>
+                            <th style={headerCell}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <Gavel size={14} /> KARAR TÜRÜ
                                 </div>
                             </th>
                             <th style={{ ...headerCell, borderRight: 'none' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <CheckCircle2 size={14} /> DURUM & KARAR
+                                    <Landmark size={14} /> AÇIKLAMA
                                 </div>
                             </th>
                         </tr>
@@ -326,7 +378,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({ data, parties }) => 
                     <tbody>
                         {paddingTop > 0 && (
                             <tr aria-hidden="true">
-                                <td colSpan={5} style={{ height: paddingTop, padding: 0 }} />
+                                <td colSpan={COLUMN_COUNT} style={{ height: paddingTop, padding: 0 }} />
                             </tr>
                         )}
                         {virtualRows.map((virtualRow) => (
@@ -340,7 +392,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({ data, parties }) => 
                         ))}
                         {paddingBottom > 0 && (
                             <tr aria-hidden="true">
-                                <td colSpan={5} style={{ height: paddingBottom, padding: 0 }} />
+                                <td colSpan={COLUMN_COUNT} style={{ height: paddingBottom, padding: 0 }} />
                             </tr>
                         )}
                     </tbody>

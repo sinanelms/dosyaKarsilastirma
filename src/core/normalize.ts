@@ -3,13 +3,21 @@ import { REPLACEMENTS } from '../constants';
 /** Türkçe kurallarla küçük harfe çevirir (İ → i, I → ı). */
 export const lowerTr = (value: string): string => value.toLocaleLowerCase('tr-TR');
 
-/** Hücre değerini temizler: boşluk, "nan" ve kapalı dosyalardaki [Suç Adı] köşeli parantezleri. */
+/**
+ * Hücre değerini temizler: boşluk, "nan" ve kapalı dosyalardaki [Suç Adı] köşeli parantezleri.
+ * Tek öğeli boş liste "[]" boş değere çevrilir. Çok öğeli boş liste ("[, , ]") ", , " olarak
+ * korunur: öğe sayısı dosyadaki suç sayısını verir (bkz. core/decision.ts crimeEntries).
+ */
 export const cleanCell = (value: unknown): string => {
   if (value === null || value === undefined) return '';
   let text = String(value).trim();
   if (lowerTr(text) === 'nan') return '';
   if (text.startsWith('[') && text.endsWith(']')) {
     text = text.slice(1, -1).trim();
+    if (/^[\s,]*$/.test(text)) {
+      const commas = (text.match(/,/g) ?? []).length;
+      return commas === 0 ? '' : Array<string>(commas + 1).fill('').join(', ');
+    }
   }
   return text;
 };
@@ -32,7 +40,19 @@ export const applyReplacements = (column: string, value: string): string => {
   return result;
 };
 
-const isBlank = (value: string) => !value || value === '-' || lowerTr(value) === 'nan';
+/**
+ * Suç bazında hizalı sütunlardaki boş satırları atar (ör. "\nEk-Takipsizlik\n" → "Ek-Takipsizlik").
+ * Yalnız düz metin gösterimi / dışa aktarım içindir; hizalamaya ihtiyaç duyan yerler ham değeri kullanır.
+ */
+export const compactLines = (value: string): string =>
+  value.includes('\n')
+    ? value
+        .split('\n')
+        .filter((line) => line.trim())
+        .join('\n')
+    : value;
+
+const isBlank =(value: string) => !value || value === '-' || lowerTr(value) === 'nan';
 
 /**
  * Aynı dosyanın farklı kişilerdeki iki değerini birleştirir.

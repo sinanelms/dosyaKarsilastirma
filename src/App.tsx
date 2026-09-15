@@ -88,7 +88,13 @@ export default function App() {
     const [isComparing, setIsComparing] = useState(false);
 
     const toast = useToast();
-    const { isAvailable: isUpdaterAvailable, isChecking, handleUpdateClick } = useUpdateButton();
+    const {
+        isVisible: isUpdateVisible,
+        version: updateVersion,
+        isDownloading,
+        progressPercent: updateProgress,
+        handleUpdateClick,
+    } = useUpdateButton();
 
     const parseTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
@@ -303,12 +309,12 @@ export default function App() {
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        {isUpdaterAvailable && (
+                        {isUpdateVisible && (
                             <button
                                 onClick={handleUpdateClick}
-                                disabled={isChecking}
-                                aria-label="Güncelleme kontrolü yap"
-                                title="Güncellemeleri denetle"
+                                disabled={isDownloading}
+                                aria-label={`Yeni sürümü yükle: v${updateVersion}`}
+                                title={`Yeni sürüm mevcut: v${updateVersion} — indirip kurar ve uygulamayı yeniden başlatır`}
                                 style={{
                                     display: 'flex',
                                     alignItems: 'center',
@@ -319,22 +325,22 @@ export default function App() {
                                     border: 'none',
                                     backgroundColor: '#10b981',
                                     color: 'white',
-                                    cursor: isChecking ? 'not-allowed' : 'pointer',
+                                    cursor: isDownloading ? 'not-allowed' : 'pointer',
                                     fontWeight: 600,
                                     fontSize: '0.875rem',
                                     transition: 'all var(--transition-fast)',
-                                    opacity: isChecking ? 0.7 : 1,
+                                    opacity: isDownloading ? 0.7 : 1,
                                 }}
                             >
-                                {isChecking ? (
+                                {isDownloading ? (
                                     <>
                                         <Loader2 size={16} className="animate-spin" />
-                                        Kontrol ediliyor...
+                                        İndiriliyor{updateProgress !== null ? ` %${updateProgress}` : '...'}
                                     </>
                                 ) : (
                                     <>
                                         <RefreshCcw size={16} />
-                                        Güncelle
+                                        Güncelle v{updateVersion}
                                     </>
                                 )}
                             </button>

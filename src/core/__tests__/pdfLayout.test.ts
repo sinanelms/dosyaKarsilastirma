@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildTableBody, buildTableHead, chunkRanges, DEFAULT_PDF_OPTIONS, sanitizePdfOptions } from '../pdfLayout';
+import { buildReportRows, buildTableHead, chunkRanges, DEFAULT_PDF_OPTIONS, sanitizePdfOptions, type ReportRow } from '../pdfLayout';
+import { FIXED_HEADERS } from '../../constants';
+import type { HeaderKey, MatchRecord } from '../../types';
 import { compareParties } from '../compare';
 import { rowsToRecords } from '../parse';
 
@@ -34,13 +36,94 @@ describe('tablo içeriği', () => {
     expect(buildTableHead(['Dosya No', 'Suçu'])).toEqual(['#', 'Taraf & Sıfat', 'Dosya No', 'Suçu']);
   });
 
-  it('taraf hücresinde her kişi "Ad: Sıfat" satırı olarak yer alır, dosyada olmayan kişi "—"', () => {
-    const body = buildTableBody(matches, parties, ['Dosya No', 'Suçu']);
-    expect(body).toEqual([['1', 'Ali: Şüpheli\nAyşe: Müşteki\nCan: —', '2024/1', 'Tehdit']]);
+  it('taraf hücresinde her kişinin sıfatı bulunur, dosyada olmayan kişinin sıfatı null', () => {
+    const rows = buildReportRows(matches, parties, ['Dosya No', 'Suçu']);
+    expect(rows.map((row) => row.cells.map((cell) => cell.text))).toEqual([['1', 'Ali: Şüpheli\nAyşe: Müşteki\nCan: —', '2024/1', 'Tehdit']]);
+    expect(rows[0].cells[1]).toMatchObject({
+      kind: 'party',
+      roles: [
+        { name: 'Ali', role: 'Şüpheli' },
+        { name: 'Ayşe', role: 'Müşteki' },
+        { name: 'Can', role: null },
+      ],
+    });
   });
 
   it('başlangıç sıra numarası verilebilir', () => {
-    expect(buildTableBody(matches, parties, [], 40)[0][0]).toBe('41');
+    expect(buildReportRows(matches, parties, [], { startIndex: 40 })[0].cells[0].text).toBe('41');
+  });
+});
+
+describe('buildReportRows: suç bazında satırlar', () => {
+  const record = (values: Partial<Record<HeaderKey, string>>): MatchRecord => ({
+    ...(Object.fromEntries(FIXED_HEADERS.map((h) => [h, ''])) as Record<HeaderKey, string>),
+    ...values,
+    _key: values['Dosya No'] ?? '',
+    roles: { a: 'Şüpheli', b: 'Müşteki' },
+    partyCount: 2,
+  });
+  const parties = [
+    { id: 'a', name: 'Ali' },
+    { id: 'b', name: 'Ayşe' },
+  ];
+  const closedFile = record({
+    'Birim Adı': 'A CBS',
+    'Dosya No': '2020/5',
+    'Dosya Durumu': 'Kapalı',
+    'Suçu': 'Tehdit, Basit Yaralama, Hakaret',
+    'Karar Türü': 'Ek-Takipsizlik, Dava Açma, Takipsizlik',
+    'Kesinleşme Tarihi': '2020-01-02 10:00:00.0, 2020-03-04 00:00:00.0, 2020-05-06 00:00:00.0',
+    'Açıklama': 'A 1. Asliye Ceza Mahkemesi(2020/9),Açık',
+  });
+  const texts = (rows: ReportRow[]) => rows.map((row) => row.cells.map((cell) => cell.text));
+  const columns: HeaderKey[] = ['Dosya No', 'Dosya Durumu', 'Suçu', 'Karar Türü', 'Kesinleşme Tarihi', 'Açıklama'];
+
+  it('her suç kendi kararı ve tarihiyle ayrı satırdır; dosya düzeyindeki hücreler suç satırları boyunca birleşir', () => {
+    const rows = buildReportRows([closedFile], parties, columns);
+    expect(texts(rows)).toEqual([
+      ['1', 'Ali: Şüpheli\nAyşe: Müşteki', '2020/5', 'Kapalı', 'Tehdit', 'Ek-Takipsizlik', '02.01.2020', 'A 1. Asliye Ceza Mahkemesi(2020/9),Açık'],
+      ['Basit Yaralama', 'Dava Açma', '04.03.2020'],
+      ['Hakaret', 'Takipsizlik', '06.05.2020'],
+    ]);
+    expect(rows[0].cells.map((cell) => cell.rowSpan)).toEqual([3, 3, 3, 3, 1, 1, 1, 3]);
+    expect(rows[0].cells[3].kind).toBe('status');
+    expect(rows.map((row) => [row.group, row.groupStart])).toEqual([
+      [0, true],
+      [0, false],
+      [0, false],
+    ]);
+  });
+
+  it('suç sütunu seçili değilse dosya tek satırdır', () => {
+    const rows = buildReportRows([closedFile], parties, ['Dosya No', 'Açıklama']);
+    expect(texts(rows)).toEqual([['1', 'Ali: Şüpheli\nAyşe: Müşteki', '2020/5', 'A 1. Asliye Ceza Mahkemesi(2020/9),Açık']]);
+    expect(rows[0].cells.every((cell) => cell.rowSpan === 1)).toBe(true);
+  });
+
+  it('çok suçlu dosya bloklara bölünür; her blok dosya bilgilerini yeniden gösterir', () => {
+    const rows = buildReportRows([closedFile], parties, ['Dosya No', 'Suçu'], { maxEntriesPerBlock: 2 });
+    expect(texts(rows)).toEqual([
+      ['1', 'Ali: Şüpheli\nAyşe: Müşteki', '2020/5', 'Tehdit'],
+      ['Basit Yaralama'],
+      ['1', 'Ali: Şüpheli\nAyşe: Müşteki', '2020/5', 'Hakaret'],
+    ]);
+    expect(rows.map((row) => row.cells[0].rowSpan)).toEqual([2, 1, 1]);
+    expect(rows.map((row) => row.groupStart)).toEqual([true, false, false]);
+  });
+
+  it('suç listesi kararlarla eşleştirilemezse suç hücresi uyarı taşır', () => {
+    const rows = buildReportRows([record({ 'Dosya No': '2020/6', 'Suçu': 'A, B, C', 'Karar Türü': 'Takipsizlik, Dava Açma' })], parties, ['Suçu', 'Karar Türü']);
+    expect(texts(rows)).toEqual([
+      ['1', 'Ali: Şüpheli\nAyşe: Müşteki', 'A, B, C\n(Karar eşleştirilemedi)', 'Takipsizlik'],
+      ['', 'Dava Açma'],
+    ]);
+    expect(rows[0].cells[2].unaligned).toBe(true);
+    expect(rows[1].cells[0].unaligned).toBeUndefined();
+  });
+
+  it('suç bilgisi olmayan dosya boş suç hücreli tek satırdır', () => {
+    const rows = buildReportRows([record({ 'Dosya No': '2020/7' })], parties, ['Dosya No', 'Suçu']);
+    expect(texts(rows)).toEqual([['1', 'Ali: Şüpheli\nAyşe: Müşteki', '2020/7', '']]);
   });
 });
 

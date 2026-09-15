@@ -29,3 +29,11 @@ src-tauri/gen/
 
 # Yerel araç ayarları
 .claude/
+
+# Geliştirici dokümanları yalnız yerelde tutulur (GitHub'a yüklenmez)
+docs/
+
+# Test için kullanılan gerçek UYAP çıktıları kişisel veri içerir; GitHub'a yüklenmez
+deneme/
+*.xlsx
+*.xls

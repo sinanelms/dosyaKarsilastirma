@@ -1,24 +1,28 @@
-import { useCallback } from 'react';
 import { useAutoUpdate } from './useAutoUpdate';
-import { useToast } from '../context';
 import { isTauri } from '../lib/tauri';
 
 interface UseUpdateButtonReturn {
-    /** Güncelleyici yalnız masaüstü uygulamasında kullanılabilir. */
-    isAvailable: boolean;
-    isChecking: boolean;
+    /** Buton yalnız masaüstü uygulamasında ve yeni bir sürüm bulunduğunda gösterilir. */
+    isVisible: boolean;
+    version: string | null;
+    isDownloading: boolean;
+    /** 0-100; boyut bilinmiyorsa null. */
+    progressPercent: number | null;
     handleUpdateClick: () => Promise<void>;
 }
 
 export const useUpdateButton = (): UseUpdateButtonReturn => {
-    const { isChecking, checkForUpdates } = useAutoUpdate();
-    const toast = useToast();
+    const { updateInfo, isDownloading, downloadProgress, downloadAndInstall } = useAutoUpdate();
+    const hasUpdate = isTauri() && !!updateInfo?.available;
 
-    const handleUpdateClick = useCallback(async () => {
-        if ((await checkForUpdates()) === 'up-to-date') {
-            toast.info('Uygulama güncel.');
-        }
-    }, [checkForUpdates, toast]);
-
-    return { isAvailable: isTauri(), isChecking, handleUpdateClick };
+    return {
+        isVisible: hasUpdate,
+        version: hasUpdate ? updateInfo.version : null,
+        isDownloading,
+        progressPercent:
+            downloadProgress && downloadProgress.total > 0
+                ? Math.round((downloadProgress.downloaded / downloadProgress.total) * 100)
+                : null,
+        handleUpdateClick: downloadAndInstall,
+    };
 };

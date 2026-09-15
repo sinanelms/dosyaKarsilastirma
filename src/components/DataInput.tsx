@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { Party } from '../types';
 import { partyColor } from '../core/party';
+import { uniqueLines } from '../core/decision';
 
 interface DataInputProps {
     party: Party;
@@ -417,12 +418,13 @@ export const DataInput: React.FC<DataInputProps> = ({
                                     {virtualRows.map((virtualRow) => {
                                         const row = data[virtualRow.index];
                                         const colors = statusColors(row['Dosya Durumu']);
+                                        const crimes = uniqueLines(row['Suçu']).join(' / ');
                                         return (
                                             <tr key={row._id} style={{ borderBottom: '1px solid var(--border-primary)', height: PREVIEW_ROW_HEIGHT }}>
                                                 <td style={{ ...cellStyle, textAlign: 'center', color: 'var(--text-tertiary)' }}>{virtualRow.index + 1}</td>
                                                 <td style={{ ...cellStyle, fontWeight: 'bold', color: 'var(--text-primary)' }}>{row['Dosya No']}</td>
-                                                <td style={{ ...cellStyle, color: 'var(--text-secondary)' }} title={row['Suçu']}>
-                                                    {row['Suçu'] || '-'}
+                                                <td style={{ ...cellStyle, color: 'var(--text-secondary)' }} title={crimes}>
+                                                    {crimes || '-'}
                                                 </td>
                                                 <td style={cellStyle}>
                                                     <span

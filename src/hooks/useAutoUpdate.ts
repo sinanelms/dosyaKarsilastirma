@@ -20,15 +20,27 @@ interface UpdateState {
     isDownloading: boolean;
     downloadProgress: UpdateProgress | null;
     error: string | null;
+    /** Bildirim kartı kapatıldı; güncelleme bilgisi (ve başlıktaki Güncelle butonu) korunur. */
+    notificationDismissed: boolean;
 }
 
 /*
  * Güncelleme durumu modül düzeyinde tek bir depoda tutulur. Böylece başlıktaki "Güncelle" butonu
  * ile UpdateNotification bileşeni aynı durumu görür (önceden her biri ayrı hook kopyası kullanıyordu).
  */
-let state: UpdateState = { updateInfo: null, isChecking: false, isDownloading: false, downloadProgress: null, error: null };
+let state: UpdateState = {
+    updateInfo: null,
+    isChecking: false,
+    isDownloading: false,
+    downloadProgress: null,
+    error: null,
+    notificationDismissed: false,
+};
 let pendingUpdate: Update | null = null;
-let startupCheckScheduled = false;
+let backgroundChecksScheduled = false;
+
+/** Uygulama uzun süre açık kalırsa yeni sürümün yine de fark edilmesi için arka plan kontrol aralığı. */
+const BACKGROUND_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 const listeners = new Set<() => void>();
 
 const setState = (patch: Partial<UpdateState>) => {
@@ -41,8 +53,21 @@ const subscribe = (listener: () => void) => {
     return () => listeners.delete(listener);
 };
 
-const errorMessage = (err: unknown, fallback: string) =>
+const rawErrorMessage = (err: unknown, fallback: string) =>
     err instanceof Error ? err.message : typeof err === 'string' ? err : fallback;
+
+/** Tauri güncelleyicisinin İngilizce hatalarını kullanıcıya anlaşılır Türkçe açıklamaya çevirir. */
+const errorMessage = (err: unknown, fallback: string) => {
+    const message = rawErrorMessage(err, fallback);
+    if (/valid release JSON/i.test(message)) {
+        return 'Sunucuda yayınlanmış güncelleme bilgisi (latest.json) bulunamadı. Yeni sürüm henüz yayınlanmamış olabilir.';
+    }
+    if (/signature/i.test(message)) return 'Güncelleme dosyasının imzası doğrulanamadı; kurulum yapılmadı.';
+    if (/(dns|connect|network|timed? ?out|error sending request)/i.test(message)) {
+        return 'Güncelleme sunucusuna bağlanılamadı. İnternet bağlantınızı kontrol edin.';
+    }
+    return message;
+};
 
 export type CheckResult = 'available' | 'up-to-date' | 'error';
 
@@ -57,11 +82,14 @@ export const checkForUpdates = async (): Promise<CheckResult> => {
     setState({ isChecking: true, error: null });
     try {
         const { check } = await import('@tauri-apps/plugin-updater');
+        const previousVersion = state.updateInfo?.available ? state.updateInfo.version : null;
         pendingUpdate = await check();
         setState({
             updateInfo: pendingUpdate
                 ? { version: pendingUpdate.version, date: pendingUpdate.date, body: pendingUpdate.body, available: true }
                 : { version: '', available: false },
+            // Kapatılan bildirim ancak daha yeni bir sürüm çıkınca yeniden gösterilir.
+            notificationDismissed: !!pendingUpdate && state.notificationDismissed && pendingUpdate.version === previousVersion,
         });
         return pendingUpdate ? 'available' : 'up-to-date';
     } catch (err) {
@@ -96,20 +124,25 @@ export const downloadAndInstall = async (): Promise<void> => {
     }
 };
 
-export const dismissUpdate = () => setState({ updateInfo: null, error: null });
+/** Bildirim kartını kapatır; güncelleme varsa başlıktaki Güncelle butonu görünmeye devam eder. */
+export const dismissUpdate = () => setState({ notificationDismissed: true, error: null });
+
+/** Arka plan kontrolü: ağ hatası kullanıcıya gösterilmez. */
+const silentCheck = () => {
+    if (state.isDownloading) return;
+    checkForUpdates().then((result) => {
+        if (result === 'error') setState({ error: null });
+    });
+};
 
 export const useAutoUpdate = () => {
     const snapshot = useSyncExternalStore(subscribe, () => state);
 
-    // Masaüstünde açılıştan birkaç saniye sonra bir kez sessizce kontrol et.
-    if (!startupCheckScheduled && isTauri()) {
-        startupCheckScheduled = true;
-        setTimeout(() => {
-            checkForUpdates().then(() => {
-                // Açılıştaki sessiz kontrolde ağ hatası kullanıcıya gösterilmez.
-                if (!state.updateInfo?.available) setState({ error: null });
-            });
-        }, 3000);
+    // Masaüstünde açılıştan birkaç saniye sonra ve sonra belirli aralıklarla sessizce kontrol et.
+    if (!backgroundChecksScheduled && isTauri()) {
+        backgroundChecksScheduled = true;
+        setTimeout(silentCheck, 3000);
+        setInterval(silentCheck, BACKGROUND_CHECK_INTERVAL_MS);
     }
 
     return { ...snapshot, checkForUpdates, downloadAndInstall, dismissUpdate };

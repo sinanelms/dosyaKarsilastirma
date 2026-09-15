@@ -78,6 +78,32 @@ describe('compareParties', () => {
     expect(result).toHaveLength(0);
   });
 
+  it('Tasra Yakalama, Adli Tıp ve Basit Yargılama Usulü dosyalarını karşılaştırmaya almaz', () => {
+    for (const type of ['CBS Tasra Yakalama Dosyası', 'Adli Tıp Dosyası', 'Ceza Dava Dosyası (Basit Yargılama Usulü)']) {
+      const result = compareParties(
+        [
+          { id: 'a', records: [rec({ 'Dosya No': '2024/1', 'Dosya Türü': type })] },
+          { id: 'b', records: [rec({ 'Dosya No': '2024/1', 'Dosya Türü': type })] },
+        ],
+        2
+      );
+      expect(result, type).toHaveLength(0);
+    }
+  });
+
+  it('aynı dosyada tekrar eden suçu (ayrı olaylar) kişiler birleştirilirken korur', () => {
+    const block = { 'Suçu': 'Hakaret\nHakaret\nTehdit', 'Karar Türü': '\nEk-Takipsizlik\n', 'Kesinleşme Tarihi': '\n2024-08-01 00:00:00.0\n' };
+    const result = compareParties(
+      [
+        { id: 'a', records: [rec({ 'Dosya No': '2024/17284', 'Sıfatı': 'Müşteki Şüpheli', ...block })] },
+        { id: 'b', records: [rec({ 'Dosya No': '2024/17284', 'Sıfatı': 'Müşteki Şüpheli', 'Suçu': 'Hakaret\nHakaret\nTehdit' })] },
+      ],
+      2
+    );
+    expect(result[0]['Suçu']).toBe('Hakaret\nHakaret\nTehdit');
+    expect(result[0]['Karar Türü']).toBe('\nEk-Takipsizlik\n');
+  });
+
   it('açık dosyaları önce, sonra birim, yıl ve numaraya göre sıralar', () => {
     const records = [
       rec({ 'Dosya No': '2023/10', 'Dosya Durumu': 'Kapalı' }),
