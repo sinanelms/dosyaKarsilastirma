@@ -1,11 +1,13 @@
 {
-    "identifier": "default",
-    "description": "Capability for the main window",
-    "windows": [
-        "main"
-    ],
-    "permissions": [
-        "core:default",
-        "shell:allow-open"
-    ]
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Ana pencere izinleri: kaydetme penceresi, seçilen dosyaya yazma, güncelleme ve yeniden başlatma",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:allow-save",
+    "fs:allow-write-file",
+    "updater:default",
+    "process:allow-restart"
+  ]
 }

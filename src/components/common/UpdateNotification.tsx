@@ -12,12 +12,18 @@ export const UpdateNotification: React.FC = () => {
         checkForUpdates,
         downloadAndInstall,
         dismissUpdate,
+        notificationDismissed,
     } = useAutoUpdate();
 
-    // Don't show if no update or update not available
-    if (!updateInfo?.available && !isChecking && !error) {
+    // Kart yalnız yeni sürüm (kapatılmadıysa), indirme veya hata varken görünür; arka plandaki
+    // sessiz kontroller kart açmaz.
+    const showUpdate = !!updateInfo?.available && !notificationDismissed;
+    if (!showUpdate && !error && !isDownloading) {
         return null;
     }
+
+    const hasUpdate = !!updateInfo?.available;
+    const title = hasUpdate ? 'Güncelleme Mevcut' : isChecking ? 'Güncelleme kontrol ediliyor…' : 'Güncelleme kontrol edilemedi';
 
     const progressPercent =
         downloadProgress && downloadProgress.total > 0
@@ -66,7 +72,7 @@ export const UpdateNotification: React.FC = () => {
                     </div>
                     <div>
                         <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--text-primary)' }}>
-                            Güncelleme Mevcut
+                            {title}
                         </div>
                         {updateInfo?.version && (
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
@@ -161,44 +167,49 @@ export const UpdateNotification: React.FC = () => {
 
             {/* Actions */}
             <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <button
-                    onClick={downloadAndInstall}
-                    disabled={isDownloading}
-                    style={{
-                        flex: 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.5rem',
-                        padding: '0.625rem 1rem',
-                        backgroundColor: 'var(--color-primary)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: 'var(--radius-md)',
-                        fontWeight: 600,
-                        fontSize: '0.8125rem',
-                        cursor: isDownloading ? 'not-allowed' : 'pointer',
-                        opacity: isDownloading ? 0.7 : 1,
-                    }}
-                >
-                    {isDownloading ? (
-                        <>
-                            <Loader2 size={16} className="animate-spin" />
-                            İndiriliyor...
-                        </>
-                    ) : (
-                        <>
-                            <Download size={16} />
-                            Güncelle
-                        </>
-                    )}
-                </button>
+                {hasUpdate && (
+                    <button
+                        onClick={downloadAndInstall}
+                        disabled={isDownloading}
+                        style={{
+                            flex: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.5rem',
+                            padding: '0.625rem 1rem',
+                            backgroundColor: 'var(--color-primary)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 'var(--radius-md)',
+                            fontWeight: 600,
+                            fontSize: '0.8125rem',
+                            cursor: isDownloading ? 'not-allowed' : 'pointer',
+                            opacity: isDownloading ? 0.7 : 1,
+                        }}
+                    >
+                        {isDownloading ? (
+                            <>
+                                <Loader2 size={16} className="animate-spin" />
+                                İndiriliyor...
+                            </>
+                        ) : (
+                            <>
+                                <Download size={16} />
+                                Güncelle
+                            </>
+                        )}
+                    </button>
+                )}
 
                 {error && (
                     <button
                         onClick={checkForUpdates}
                         disabled={isChecking}
+                        title="Tekrar dene"
                         style={{
+                            flex: hasUpdate ? undefined : 1,
+                            gap: '0.5rem',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -211,6 +222,7 @@ export const UpdateNotification: React.FC = () => {
                         }}
                     >
                         <RefreshCcw size={16} className={isChecking ? 'animate-spin' : ''} />
+                        {!hasUpdate && 'Tekrar Dene'}
                     </button>
                 )}
             </div>

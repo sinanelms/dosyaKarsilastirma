@@ -9,13 +9,14 @@ interface SplashScreenProps {
 const SPLASH_MESSAGES = [
     "UYAP verilerini kolayca karşılaştırın",
     "PDF ve Excel dışa aktarım desteği",
+    "İkiden fazla kişiyi aynı anda karşılaştırın",
     "Koyu ve açık tema seçenekleri",
     "Klavye kısayolları ile hızlı kullanım",
     "Ortak dosyaları anında tespit edin",
     "Cumhuriyet Başsavcılıkları için özel tasarım",
 ];
 
-export function SplashScreen({ onComplete, minDuration = 2500 }: SplashScreenProps) {
+export function SplashScreen({ onComplete, minDuration = 1200 }: SplashScreenProps) {
     const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
     const [fadeIn, setFadeIn] = useState(true);
 

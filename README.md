@@ -1,170 +1,66 @@
 # UYAP Dosya Karşılaştırma
 
-Cumhuriyet Başsavcılığı için geliştirilmiş UYAP dosya karşılaştırma ve analiz modülü.
+Cumhuriyet Başsavcılıkları için geliştirilmiş UYAP dosya karşılaştırma ve analiz modülü. İki veya daha fazla kişinin UYAP dosya listelerini karşılaştırır ve **aynı dosyada yer aldıkları kayıtları** her kişinin sıfatıyla birlikte listeler.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Tauri](https://img.shields.io/badge/Tauri-2.0-24c8db.svg)
+![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
+![Tauri](https://img.shields.io/badge/Tauri-2-24c8db.svg)
 ![React](https://img.shields.io/badge/React-19-61dafb.svg)
 
 ## Özellikler
 
-### 🔍 Dosya Karşılaştırma
-- İki farklı tarafın UYAP verilerini karşılaştırma
-- Ortak dosyaların akıllı birleştirme ile tespiti
-- Otomatik veri temizleme ve standartlaştırma
+- **Çoklu kişi:** Varsayılan 2 kişi; "Kişi Ekle" ile istediğiniz kadar. 3+ kişide "En az N kişide ortak" seçimi.
+- **İki giriş yolu:** UYAP tablosundan kopyala-yapıştır **veya** `.xlsx` / `.xls` dosyası yükle (butonla ya da sürükle-bırak).
+- **Akıllı eşleştirme:** Dosya No yazım farkları (`2024/05` = `2024/5`) ve birim adı kısaltmaları (`Cumhuriyet Başsavcılığı` = `CBS`) tolere edilir. Başlık satırına göre sütun eşleme yapılır.
+- **Gerçek PDF rapor:** Önizleme, kaydedilecek dosyanın kendisidir. Kenar boşlukları, sayfa başına satır, yatay/dikey, A4/A3, yazı tipi, yazı boyutu, hücre boşluğu ve sütun seçimi ayarlanabilir.
+- **Excel dışa aktarım:** Kişi sıfat sütunlarıyla birlikte `.xlsx`.
+- **Büyük listeler:** Sanal listeleme ve Web Worker sayesinde binlerce kayıtta akıcı çalışır.
+- **Koyu/açık tema**, klavye kısayolları, imzalı otomatik güncelleme.
+- **Gizlilik:** Tüm işlemler yerelde yapılır; veriler hiçbir sunucuya gönderilmez.
 
-### 🎨 Modern Arayüz
-- **Koyu/Açık Tema**: Göz yorgunluğunu azaltan koyu mod desteği
-- **Responsive Tasarım**: Farklı ekran boyutlarına uyumlu
-- **Anlık Geri Bildirim**: Toast bildirimleri ile kullanıcı bilgilendirmesi
+## Klavye Kısayolları
 
-### ⌨️ Klavye Kısayolları
 | Kısayol | İşlev |
-|---------|-------|
-| `CTRL+K` | Karşılaştırmayı başlat |
-| `CTRL+S` | CSV olarak dışa aktar |
-| `ESC` | Açık modalı kapat |
+|---|---|
+| `Ctrl+K` | Karşılaştır |
+| `Ctrl+S` | Excel olarak kaydet |
+| `Esc` | Açık pencereyi kapat |
 
-### 📊 Dışa Aktarım
-- **CSV/Excel**: Tablo verilerini Excel uyumlu formatta indir
-- **PDF Rapor**: Özelleştirilebilir PDF rapor oluşturma
-  - Sayfa yönü seçimi (Yatay/Dikey)
-  - Kenar boşluğu ayarları
-  - Sütun seçimi
-  - Font boyutu ayarı
+## Kullanım
 
-### 🔄 Otomatik Güncelleme
-- GitHub Releases üzerinden otomatik güncelleme kontrolü
-- İndirme durumu göstergesi
-- Tek tıkla güncelleme ve yeniden başlatma
+1. UYAP'tan kişinin dosya listesini kopyalayın veya Excel olarak indirin.
+2. Her kişi kartına yapıştırın ya da "Excel Yükle" ile dosyayı seçin. Aynı karta birden fazla sayfa veya dosya eklenebilir.
+3. Gerekirse "Kişi Ekle" ile yeni kişi ekleyin.
+4. **Karşılaştır** (`Ctrl+K`).
+5. Sonuçları inceleyin; **PDF Oluştur** veya **Excel** ile kaydedin.
 
-## Kurulum
+## Hızlı Başlangıç (Geliştirici)
 
-### Geliştirme Ortamı
-
-1. **Bağımlılıkları yükleyin:**
 ```bash
 npm install
 ```
 
-2. **Geliştirme sunucusunu başlatın:**
 ```bash
 npm run dev
 ```
 
-### Masaüstü Uygulaması (Tauri)
-
-#### Gereksinimler
-- [Rust](https://www.rust-lang.org/tools/install)
-- Windows için: Visual Studio C++ Build Tools
-- [Node.js](https://nodejs.org/) v18+
-
-#### Derleme
+Masaüstü uygulaması için Rust ve Visual Studio Build Tools gerekir:
 
 ```bash
-# Geliştirme modunda çalıştır
-npm run tauri dev
-
-# Üretim derlemesi
-npm run tauri build
+npm run tauri:dev
 ```
 
-## Kullanım
+Test, lint ve derleme:
 
-### 1. Veri Girişi
-
-1. UYAP'tan ilgili verileri kopyalayın (CTRL+C)
-2. Sol panele birinci tarafın verilerini yapıştırın
-3. Sağ panele ikinci tarafın verilerini yapıştırın
-
-> **İpucu**: Birden fazla sayfa verisini aynı panele yapıştırarak birleştirebilirsiniz.
-
-### 2. Karşılaştırma
-
-**Karşılaştır** butonuna tıklayın veya `CTRL+K` kullanın.
-
-### 3. Sonuçları İnceleme
-
-- Ortak dosyalar tabloda gösterilir
-- Tarafların sıfatları ayrı sütunlarda belirtilir
-- Dosya durumu renk kodlarıyla gösterilir:
-  - 🟢 Yeşil: Açık dosyalar
-  - 🔴 Kırmızı: Kapalı dosyalar
-
-### 4. Dışa Aktarım
-
-- **CSV**: `Excel/CSV` butonuna tıklayın
-- **PDF**: `PDF Oluştur` butonuna tıklayarak özelleştirilebilir rapor oluşturun
-
-## Proje Yapısı
-
-```
-dosyaKarsilastirma/
-├── src/
-│   ├── components/          # React bileşenleri
-│   │   ├── common/          # Ortak UI bileşenleri
-│   │   │   ├── ErrorFallback.tsx
-│   │   │   ├── Toast.tsx
-│   │   │   ├── ThemeToggle.tsx
-│   │   │   └── UpdateNotification.tsx
-│   │   ├── DataInput.tsx
-│   │   ├── Logger.tsx
-│   │   ├── PdfExportModal.tsx
-│   │   └── ResultsTable.tsx
-│   ├── context/             # React Context
-│   │   ├── ThemeContext.tsx
-│   │   └── ToastContext.tsx
-│   ├── hooks/               # Custom hooks
-│   │   ├── useAutoUpdate.ts
-│   │   └── useKeyboardShortcuts.ts
-│   ├── utils/               # Yardımcı fonksiyonlar
-│   │   └── processor.ts
-│   ├── types/               # TypeScript tip tanımlamaları
-│   ├── constants/           # Sabit değerler
-│   ├── styles/              # Global stiller
-│   ├── App.tsx              # Ana uygulama bileşeni
-│   └── main.tsx             # Giriş noktası
-├── src-tauri/               # Tauri (Rust) backend
-├── public/                  # Statik dosyalar
-└── package.json
+```bash
+npm run lint && npm test && npm run build
 ```
 
 ## Teknolojiler
 
-- **Frontend**: React 19, TypeScript, Vite
-- **Styling**: Tailwind CSS, CSS Variables
-- **Desktop**: Tauri 2.0 (Rust)
-- **İkonlar**: Lucide React
-- **Linting**: ESLint, Prettier
+React 19 · TypeScript · Vite · Tauri 2 · jsPDF + jspdf-autotable · SheetJS · TanStack Virtual · vitest · ESLint 9
 
-## Ortam Değişkenleri
-
-Otomatik güncelleme için aşağıdaki yapılandırmalar `src-tauri/tauri.conf.json` dosyasında ayarlanmalıdır:
-
-```json
-{
-  "plugins": {
-    "updater": {
-      "endpoints": ["https://github.com/KULLANICI/REPO/releases/latest/download/latest.json"],
-      "pubkey": "PUBLIC_KEY_HERE"
-    }
-  }
-}
-```
-
-## Lisans
-
-MIT License - Detaylar için [LICENSE](LICENSE) dosyasına bakın.
-
-## Katkıda Bulunma
-
-1. Bu depoyu fork edin
-2. Yeni bir branch oluşturun (`git checkout -b feature/yenilik`)
-3. Değişikliklerinizi commit edin (`git commit -am 'Yeni özellik ekle'`)
-4. Branch'i push edin (`git push origin feature/yenilik`)
-5. Pull Request açın
+Fontlar: Noto Sans / Noto Serif (SIL OFL 1.1), Roboto (Apache 2.0). Lisans metinleri `src/assets/fonts` altındadır.
 
 ---
 
-**Not**: Bu uygulama resmi bir UYAP ürünü değildir. Cumhuriyet Başsavcılıkları için geliştirilen bağımsız bir yardımcı araçtır.
+**Not:** Bu uygulama resmi bir UYAP ürünü değildir. Cumhuriyet Başsavcılıkları için geliştirilmiş bağımsız bir yardımcı araçtır.

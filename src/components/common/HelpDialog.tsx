@@ -166,8 +166,8 @@ export function HelpDialog({ isOpen, onClose }: HelpDialogProps) {
                             }}
                         >
                             UYAP Dosya Karşılaştırma, Cumhuriyet Başsavcılıkları için geliştirilmiş
-                            bir analiz aracıdır. İki farklı kişinin UYAP sistemindeki dosyalarını
-                            karşılaştırarak ortak dosyaları tespit eder.
+                            bir analiz aracıdır. İki veya daha fazla kişinin UYAP sistemindeki dosyalarını
+                            karşılaştırarak aynı dosyada yer aldıkları kayıtları tespit eder.
                         </p>
                     </section>
 
@@ -193,19 +193,21 @@ export function HelpDialog({ isOpen, onClose }: HelpDialogProps) {
                         >
                             <li style={{ marginBottom: '0.5rem' }}>
                                 <strong>1.</strong> UYAP sisteminden karşılaştırmak istediğiniz
-                                verileri kopyalayın (Ctrl+C)
+                                verileri kopyalayın (Ctrl+C) veya Excel (.xlsx) olarak indirin
                             </li>
                             <li style={{ marginBottom: '0.5rem' }}>
-                                <strong>2.</strong> Sol panele birinci kişinin verilerini yapıştırın
+                                <strong>2.</strong> Her kişi kartına verileri yapıştırın ya da "Excel Yükle" ile
+                                dosyayı seçin / karta sürükleyip bırakın
                             </li>
                             <li style={{ marginBottom: '0.5rem' }}>
-                                <strong>3.</strong> Sağ panele ikinci kişinin verilerini yapıştırın
+                                <strong>3.</strong> Daha fazla kişi için "Kişi Ekle" butonunu kullanın; 3+ kişide
+                                "En az N kişide ortak" seçicisiyle eşleşme koşulunu belirleyin
                             </li>
                             <li style={{ marginBottom: '0.5rem' }}>
                                 <strong>4.</strong> "Karşılaştır" butonuna tıklayın
                             </li>
                             <li>
-                                <strong>5.</strong> Ortak dosyalar tabloda listelenecektir
+                                <strong>5.</strong> Ortak dosyalar her kişinin sıfatıyla listelenir; PDF veya Excel olarak kaydedebilirsiniz
                             </li>
                         </ol>
                     </section>
@@ -232,8 +234,8 @@ export function HelpDialog({ isOpen, onClose }: HelpDialogProps) {
                             {[
                                 { icon: ClipboardPaste, text: 'Hızlı yapıştırma' },
                                 { icon: FileOutput, text: 'Akıllı karşılaştırma' },
-                                { icon: Printer, text: 'PDF dışa aktarım' },
-                                { icon: Download, text: 'Excel/CSV desteği' },
+                                { icon: Printer, text: 'Ayarlanabilir gerçek PDF' },
+                                { icon: Download, text: 'Excel yükleme / dışa aktarım' },
                                 { icon: Moon, text: 'Koyu tema' },
                                 { icon: Sun, text: 'Açık tema' },
                             ].map((item, index) => (
@@ -282,7 +284,7 @@ export function HelpDialog({ isOpen, onClose }: HelpDialogProps) {
                         >
                             {[
                                 { keys: 'Ctrl + K', action: 'Karşılaştırmayı başlat' },
-                                { keys: 'Ctrl + S', action: 'CSV olarak indir' },
+                                { keys: 'Ctrl + S', action: 'Excel olarak kaydet' },
                                 { keys: 'Escape', action: 'Açık modalı kapat' },
                             ].map((shortcut, index) => (
                                 <div
