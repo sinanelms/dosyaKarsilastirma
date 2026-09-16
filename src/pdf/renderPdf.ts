@@ -37,6 +37,18 @@ const GROUP_LINE_COLOR: [number, number, number] = [71, 85, 105];
 const ZEBRA_COLOR: [number, number, number] = [246, 248, 251];
 const WARNING_TEXT_COLOR: [number, number, number] = [180, 83, 9];
 
+/** Gövde hücrelerinin sütuna göre hizası; listede olmayan sütunlar sol üst hizalıdır. */
+const BODY_ALIGN: Partial<Record<string, { halign?: 'center'; valign: 'middle' }>> = {
+  'Birim Adı': { halign: 'center', valign: 'middle' },
+  'Dosya No': { valign: 'middle' },
+  'Dosya Durumu': { halign: 'center', valign: 'middle' },
+  Suçu: { valign: 'middle' },
+  'Suç Tarihi': { valign: 'middle' },
+  'Karar Türü': { valign: 'middle' },
+  'Kesinleşme Tarihi': { valign: 'middle' },
+  Açıklama: { valign: 'middle' },
+};
+
 /**
  * Raporu jsPDF ile üretir. Tarayıcı, Web Worker ve Node'da aynı şekilde çalışır.
  * Önizleme de bu fonksiyonun çıktısıdır; bu yüzden önizleme ile kaydedilen dosya birebir aynıdır.
@@ -146,7 +158,9 @@ export const renderPdf = ({ matches, parties, options: rawOptions, font, generat
         const { styles } = data.cell;
         // Dönüşümlü renk satıra değil dosyaya göre: bir dosyanın suç satırları aynı zemindedir.
         if (options.zebra && row.group % 2 === 1) styles.fillColor = ZEBRA_COLOR;
-        if (head[0][data.column.index] === 'Dosya No') styles.fontStyle = 'bold';
+        const title = head[0][data.column.index];
+        if (title === 'Dosya No') styles.fontStyle = 'bold';
+        Object.assign(styles, BODY_ALIGN[title]);
         if (cell.unaligned) styles.textColor = WARNING_TEXT_COLOR;
 
         if (cell.kind === 'party' && cell.roles) {
@@ -167,14 +181,16 @@ export const renderPdf = ({ matches, parties, options: rawOptions, font, generat
         const cell = reportCells.get(data.cell.raw as object);
         const row = rows[data.row.index];
         if (!cell || !row) return;
-        const { x, y, width } = data.cell;
+        const { x, y, width, height } = data.cell;
         const innerWidth = width - 2 * options.cellPadding;
         if (cell.kind === 'party' && cell.roles) {
           const layout = layoutPartyCell(doc, cell.roles, innerWidth, badgeFont);
           drawCellLayout(doc, layout, x + options.cellPadding, y + options.cellPadding, innerWidth, badgeFont);
         } else if (cell.kind === 'status') {
+          // Etiketler hücrenin (birleştirilmiş satırlar dahil) yatay ve dikey ortasına çizilir.
           const layout = layoutStatusCell(doc, cell.text, innerWidth, badgeFont);
-          drawCellLayout(doc, layout, x + options.cellPadding, y + options.cellPadding, innerWidth, badgeFont);
+          const offsetY = Math.max(0, (height - 2 * options.cellPadding - layout.height) / 2);
+          drawCellLayout(doc, layout, x + options.cellPadding, y + options.cellPadding + offsetY, innerWidth, badgeFont, 'center');
         }
         // Dosyalar arasına kalın ayırıcı: satırın son hücresi çizildikten sonra, tablonun tüm genişliğince.
         if (row.groupStart && data.row.index > 0 && data.column.index === data.table.columns.length - 1) {

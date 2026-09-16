@@ -144,8 +144,16 @@ const drawBadge = (doc: jsPDF, badge: Badge, x: number, y: number, family: strin
   doc.text(badge.lines, x + badge.padX, y + badge.padY, { baseline: 'top', lineHeightFactor: LINE_HEIGHT_FACTOR });
 };
 
-/** Yerleşimi (x, y) sol üst köşesinden başlayarak çizer. */
-export const drawCellLayout = (doc: jsPDF, layout: CellLayout, x: number, y: number, width: number, font: BadgeFont) => {
+/** Yerleşimi (x, y) sol üst köşesinden başlayarak çizer; `center` etiketleri genişlik içinde yatay ortalar. */
+export const drawCellLayout = (
+  doc: jsPDF,
+  layout: CellLayout,
+  x: number,
+  y: number,
+  width: number,
+  font: BadgeFont,
+  align: 'left' | 'center' = 'left'
+) => {
   for (const item of layout.items) {
     if (item.type === 'rule') {
       doc.setDrawColor(...RULE_COLOR);
@@ -157,7 +165,8 @@ export const drawCellLayout = (doc: jsPDF, layout: CellLayout, x: number, y: num
       doc.setTextColor(...(item.absent ? ABSENT_NAME_COLOR : NAME_COLOR));
       doc.text(item.lines, x, y + item.y, { baseline: 'top', lineHeightFactor: LINE_HEIGHT_FACTOR });
     } else {
-      drawBadge(doc, item.badge, x, y + item.y, font.family);
+      const offsetX = align === 'center' ? Math.max(0, (width - item.badge.width) / 2) : 0;
+      drawBadge(doc, item.badge, x + offsetX, y + item.y, font.family);
     }
   }
 };
