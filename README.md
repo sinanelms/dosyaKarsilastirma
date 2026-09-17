@@ -2,7 +2,7 @@
 
 Cumhuriyet Başsavcılıkları için geliştirilmiş UYAP dosya karşılaştırma ve analiz modülü. İki veya daha fazla kişinin UYAP dosya listelerini karşılaştırır ve **aynı dosyada yer aldıkları kayıtları** her kişinin sıfatıyla birlikte listeler.
 
-![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.2-blue.svg)
 ![Tauri](https://img.shields.io/badge/Tauri-2-24c8db.svg)
 ![React](https://img.shields.io/badge/React-19-61dafb.svg)
 
@@ -17,7 +17,14 @@ Cumhuriyet Başsavcılıkları için geliştirilmiş UYAP dosya karşılaştırm
 - **Koyu/açık tema**, klavye kısayolları, imzalı otomatik güncelleme.
 - **Gizlilik:** Tüm işlemler yerelde yapılır; veriler hiçbir sunucuya gönderilmez.
 
-## Yenilikler (v1.1.1)
+## Yenilikler (v1.1.2)
+
+- **Dosya Türü filtresi:** Analiz Sonuçları'nda varsayılan olarak yalnız soruşturma dosyaları (CBS Sorusturma Dosyası) gösterilir; diğer türler "Dosya Türü" filtresinden seçilir. Tablo, PDF rapor ve Excel çıktısı filtreye uyar.
+- **Karşılaştır / Sıfırla** butonları kişi kartlarının altına taşındı; **PDF Oluştur** ve **Excel** butonları tablonun altında da yer alır.
+- **Kişi adı:** Kelimelerin ilk harfi otomatik büyür; Excel yüklenince ad, dosya adından doldurulur (elle değiştirilebilir).
+- Metin görünümünde veri yapıştırılınca kart otomatik olarak tablo görünümüne geçer.
+
+## Önceki Sürüm (v1.1.1)
 
 - **PDF raporda hücre hizalama:** "Dosya Karşılaştırma ve Analiz Raporu" tablosu daha okunaklı hale getirildi.
   - **Birim Adı** ve **Dosya Durumu** hücreleri yatay ve dikey olarak ortalanır.
@@ -38,7 +45,8 @@ Cumhuriyet Başsavcılıkları için geliştirilmiş UYAP dosya karşılaştırm
 2. Her kişi kartına yapıştırın ya da "Excel Yükle" ile dosyayı seçin. Aynı karta birden fazla sayfa veya dosya eklenebilir.
 3. Gerekirse "Kişi Ekle" ile yeni kişi ekleyin.
 4. **Karşılaştır** (`Ctrl+K`).
-5. Sonuçları inceleyin; **PDF Oluştur** veya **Excel** ile kaydedin.
+5. Sonuçları inceleyin. Varsayılan olarak yalnız soruşturma dosyaları listelenir; diğer türleri **Dosya Türü** filtresinden seçin.
+6. **PDF Oluştur** veya **Excel** ile kaydedin (yalnız filtrede seçili türler aktarılır).
 
 ## Hızlı Başlangıç (Geliştirici)
 

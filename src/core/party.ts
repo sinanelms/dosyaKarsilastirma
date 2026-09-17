@@ -7,6 +7,7 @@ let partyCounter = 0;
 export const createParty = (index: number): Party => ({
   id: `p${Date.now().toString(36)}${(partyCounter++).toString(36)}`,
   name: `${index + 1}. Kişi`,
+  nameEdited: false,
   text: '',
   textRecords: [],
   fileRecords: [],
@@ -27,3 +28,17 @@ export const withRecords = (
 };
 
 export const partyColor = (party: Pick<Party, 'colorIndex'>) => PARTY_COLORS[party.colorIndex % PARTY_COLORS.length];
+
+/** Her kelimenin ilk harfini Türkçe kurallarla büyütür; kalan harflere dokunmaz. */
+export const capitalizeName = (value: string): string =>
+  value.replace(/(^|\s)(\S)/gu, (_, space: string, letter: string) => space + letter.toLocaleUpperCase('tr-TR'));
+
+/** Excel dosya adından kişi adı üretir: uzantı atılır, alt çizgiler boşluğa çevrilir. */
+export const nameFromFileName = (fileName: string): string =>
+  capitalizeName(
+    fileName
+      .replace(/\.(xlsx|xls)$/i, '')
+      .replace(/_+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );

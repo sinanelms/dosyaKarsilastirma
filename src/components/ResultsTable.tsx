@@ -9,6 +9,8 @@ import { roleTone, statusTone, type Tone } from '../core/tone';
 interface ResultsTableProps {
     data: MatchRecord[];
     parties: Party[];
+    /** Tablo boşken gösterilecek metin. */
+    emptyMessage?: string;
 }
 
 const lower = (value: string) => value.toLocaleLowerCase('tr-TR');
@@ -266,7 +268,7 @@ const ResultRow = React.memo(function ResultRow({
     );
 });
 
-export const ResultsTable: React.FC<ResultsTableProps> = ({ data, parties }) => {
+export const ResultsTable: React.FC<ResultsTableProps> = ({ data, parties, emptyMessage }) => {
     const tableRef = useRef<HTMLDivElement>(null);
     const [scrollMargin, setScrollMargin] = useState(0);
 
@@ -303,7 +305,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({ data, parties }) => 
                 }}
             >
                 <FileText size={48} style={{ marginBottom: '0.5rem', opacity: 0.5 }} />
-                <p>Karşılaştırma sonucu burada görünecek.</p>
+                <p>{emptyMessage ?? 'Karşılaştırma sonucu burada görünecek.'}</p>
             </div>
         );
     }

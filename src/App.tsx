@@ -1,19 +1,20 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { Download, FileOutput, FileText, HelpCircle, Keyboard, Loader2, RefreshCcw, Scale, UserPlus, Users } from 'lucide-react';
 import { DataInput } from './components/DataInput';
+import { DosyaTuruFilter } from './components/DosyaTuruFilter';
 import { ResultsTable } from './components/ResultsTable';
 import { Logger } from './components/Logger';
 import { HelpDialog, ThemeToggle, ToastContainer, UpdateNotification } from './components/common';
 import { rowsToRecords, textToRows } from './core/parse';
 import { compareParties } from './core/compare';
-import { createParty, withRecords } from './core/party';
+import { capitalizeName, createParty, nameFromFileName, withRecords } from './core/party';
 import { readXlsxFile } from './workers/readXlsxFile';
 import { saveBinaryFile, todayStamp } from './lib/tauri';
 import { useToast } from './context';
 import { useKeyboardShortcuts, useUpdateButton } from './hooks';
 import type { LogEntry, MatchRecord, Party } from './types';
-import { DEFAULT_PARTY_COUNT, MAX_LOG_ENTRIES } from './constants';
+import { DEFAULT_PARTY_COUNT, DEFAULT_VISIBLE_DOSYA_TURU, MAX_LOG_ENTRIES } from './constants';
 
 const PARSE_DEBOUNCE_MS = 200;
 
@@ -79,6 +80,7 @@ export default function App() {
     const [results, setResults] = useState<MatchRecord[]>([]);
     const [hasCompared, setHasCompared] = useState(false);
     const [minCount, setMinCount] = useState(2);
+    const [visibleTypes, setVisibleTypes] = useState<string[]>(DEFAULT_VISIBLE_DOSYA_TURU);
     const [logs, setLogs] = useState<LogEntry[]>([]);
 
     // Modallar
@@ -148,9 +150,14 @@ export default function App() {
             for (const file of files) {
                 try {
                     const records = await readXlsxFile(file);
-                    updateParty(party.id, (p) =>
-                        withRecords(p, { fileRecords: [...p.fileRecords, ...records], fileNames: [...p.fileNames, file.name] })
-                    );
+                    updateParty(party.id, (p) => {
+                        // Ad elle değiştirilmediyse ilk yüklenen Excel'in adı kişi adı olur.
+                        const autoName = !p.nameEdited && p.fileNames.length === 0 ? nameFromFileName(file.name) : '';
+                        return withRecords(
+                            { ...p, name: autoName || p.name },
+                            { fileRecords: [...p.fileRecords, ...records], fileNames: [...p.fileNames, file.name] }
+                        );
+                    });
                     addLog(`${party.name}: "${file.name}" dosyasından ${records.length} dosya okundu.`);
                     if (records.length === 0) {
                         toast.warning(`"${file.name}" içinde dosya kaydı bulunamadı. Başlık satırını kontrol edin.`);
@@ -227,18 +234,28 @@ export default function App() {
         parseTimers.current.clear();
         setParties(initialParties());
         setMinCount(2);
+        setVisibleTypes(DEFAULT_VISIBLE_DOSYA_TURU);
         invalidateResults();
         setLogs([]);
         toast.info('Tüm veriler temizlendi.');
     }, [toast, invalidateResults]);
 
+    // Sonuçlarda geçen dosya türleri (sayılarıyla); tablo, PDF ve Excel yalnız seçili türleri içerir.
+    const typeOptions = useMemo(() => {
+        const counts = new Map<string, number>();
+        for (const row of results) counts.set(row['Dosya Türü'], (counts.get(row['Dosya Türü']) ?? 0) + 1);
+        return Array.from(counts, ([type, count]) => ({ type, count })).sort((a, b) => b.count - a.count || a.type.localeCompare(b.type, 'tr'));
+    }, [results]);
+
+    const visibleResults = useMemo(() => results.filter((row) => visibleTypes.includes(row['Dosya Türü'])), [results, visibleTypes]);
+
     const handleExportExcel = useCallback(async () => {
-        if (results.length === 0) {
+        if (visibleResults.length === 0) {
             toast.warning('Dışa aktarılacak sonuç yok.');
             return;
         }
         try {
-            const saved = await saveBinaryFile(`Karsilastirma_Raporu_${todayStamp()}.xlsx`, (await import('./core/xlsx')).buildResultsWorkbook(results, parties), {
+            const saved = await saveBinaryFile(`Karsilastirma_Raporu_${todayStamp()}.xlsx`, (await import('./core/xlsx')).buildResultsWorkbook(visibleResults, parties), {
                 name: 'Excel Çalışma Kitabı',
                 extensions: ['xlsx'],
             });
@@ -247,7 +264,7 @@ export default function App() {
             console.error(error);
             toast.error('Excel dosyası kaydedilemedi.');
         }
-    }, [results, parties, toast]);
+    }, [visibleResults, parties, toast]);
 
     useKeyboardShortcuts([
         { key: 'k', ctrl: true, handler: handleCompare, description: 'Karşılaştır' },
@@ -257,6 +274,19 @@ export default function App() {
 
     // Sonuçta yalnız karşılaştırmaya katılmış kişiler gösterilir.
     const resultParties = results.length > 0 ? parties.filter((p) => results[0].roles[p.id] !== undefined) : parties;
+
+    const exportButtons = (
+        <>
+            <button onClick={() => setIsPdfModalOpen(true)} style={secondaryButton}>
+                <FileText size={16} style={{ color: 'var(--color-error)' }} />
+                PDF Oluştur
+            </button>
+            <button onClick={handleExportExcel} style={secondaryButton}>
+                <Download size={16} style={{ color: 'var(--color-success)' }} />
+                Excel
+            </button>
+        </>
+    );
 
     return (
         <div
@@ -360,49 +390,6 @@ export default function App() {
                         </button>
 
                         <ThemeToggle />
-
-                        <button
-                            onClick={handleClearAll}
-                            aria-label="Tüm verileri sıfırla"
-                            style={{ ...secondaryButton, gap: '0.5rem', padding: '0.5rem 1rem', transition: 'all var(--transition-fast)' }}
-                        >
-                            <RefreshCcw size={16} />
-                            Sıfırla
-                        </button>
-
-                        <button
-                            onClick={handleCompare}
-                            disabled={!canCompare}
-                            aria-label="Verileri karşılaştır"
-                            aria-busy={isComparing}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.5rem',
-                                padding: '0.5rem 1rem',
-                                fontSize: '0.875rem',
-                                fontWeight: 500,
-                                color: 'white',
-                                backgroundColor: 'var(--color-primary)',
-                                border: 'none',
-                                borderRadius: 'var(--radius-md)',
-                                cursor: canCompare ? 'pointer' : 'not-allowed',
-                                opacity: canCompare ? 1 : 0.7,
-                                transition: 'all var(--transition-fast)',
-                            }}
-                        >
-                            {isComparing ? (
-                                <>
-                                    <Loader2 size={16} className="animate-spin" />
-                                    İşleniyor...
-                                </>
-                            ) : (
-                                <>
-                                    <FileOutput size={16} />
-                                    Karşılaştır
-                                </>
-                            )}
-                        </button>
                     </div>
                 </div>
             </header>
@@ -469,13 +456,80 @@ export default function App() {
                             party={party}
                             canRemove={index >= DEFAULT_PARTY_COUNT}
                             isLoadingFile={loadingPartyIds.includes(party.id)}
-                            onNameChange={(name) => updateParty(party.id, (p) => ({ ...p, name }))}
+                            onNameChange={(name) => updateParty(party.id, (p) => ({ ...p, name: capitalizeName(name), nameEdited: true }))}
                             onTextChange={(text) => handleTextChange(party, text)}
                             onFiles={(files) => handleFiles(party, files)}
                             onClear={() => handleClearParty(party.id)}
                             onRemove={() => handleRemoveParty(party.id)}
                         />
                     ))}
+                </div>
+
+                {/* Actions */}
+                <div
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        gap: '0.75rem',
+                        marginBottom: '2rem',
+                        padding: '0.75rem 1rem',
+                        backgroundColor: 'var(--bg-card)',
+                        border: '1px solid var(--border-primary)',
+                        borderRadius: 'var(--radius-xl)',
+                        boxShadow: 'var(--shadow-sm)',
+                        flexWrap: 'wrap',
+                    }}
+                >
+                    <span style={{ flex: 1, minWidth: '200px', fontSize: '0.8125rem', color: 'var(--text-tertiary)' }}>
+                        {filledPartyCount >= 2
+                            ? `${filledPartyCount} kişide veri var; karşılaştırmaya hazır.`
+                            : 'Karşılaştırma için en az iki kişiye veri girin.'}
+                    </span>
+
+                    <button
+                        onClick={handleClearAll}
+                        aria-label="Tüm verileri sıfırla"
+                        style={{ ...secondaryButton, gap: '0.5rem', padding: '0.625rem 1.25rem', transition: 'all var(--transition-fast)' }}
+                    >
+                        <RefreshCcw size={16} />
+                        Sıfırla
+                    </button>
+
+                    <button
+                        onClick={handleCompare}
+                        disabled={!canCompare}
+                        aria-label="Verileri karşılaştır"
+                        aria-busy={isComparing}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            padding: '0.625rem 1.5rem',
+                            fontSize: '0.9375rem',
+                            fontWeight: 600,
+                            color: 'white',
+                            backgroundColor: 'var(--color-primary)',
+                            border: 'none',
+                            borderRadius: 'var(--radius-md)',
+                            cursor: canCompare ? 'pointer' : 'not-allowed',
+                            opacity: canCompare ? 1 : 0.7,
+                            transition: 'all var(--transition-fast)',
+                        }}
+                    >
+                        {isComparing ? (
+                            <>
+                                <Loader2 size={16} className="animate-spin" />
+                                İşleniyor...
+                            </>
+                        ) : (
+                            <>
+                                <FileOutput size={16} />
+                                Karşılaştır
+                                <kbd style={{ ...kbdStyle, backgroundColor: 'rgba(255, 255, 255, 0.2)', color: 'white' }}>Ctrl+K</kbd>
+                            </>
+                        )}
+                    </button>
                 </div>
 
                 {/* Results Section */}
@@ -496,11 +550,12 @@ export default function App() {
                                         marginLeft: '0.5rem',
                                     }}
                                 >
-                                    {results.length} Eşleşme
+                                    {visibleResults.length === results.length ? `${results.length} Eşleşme` : `${visibleResults.length} / ${results.length} Eşleşme`}
                                 </span>
                             )}
                         </h2>
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                            {results.length > 0 && <DosyaTuruFilter options={typeOptions} selected={visibleTypes} onChange={setVisibleTypes} />}
                             {parties.length > 2 && (
                                 <label style={{ ...secondaryButton, cursor: 'default', gap: '0.5rem' }} title="Bir dosyanın listelenmesi için kaç kişide ortak olması gerektiği">
                                     <Users size={16} style={{ color: 'var(--color-primary)' }} />
@@ -528,22 +583,19 @@ export default function App() {
                                     kişide ortak
                                 </label>
                             )}
-                            {results.length > 0 && (
-                                <>
-                                    <button onClick={() => setIsPdfModalOpen(true)} style={secondaryButton}>
-                                        <FileText size={16} style={{ color: 'var(--color-error)' }} />
-                                        PDF Oluştur
-                                    </button>
-                                    <button onClick={handleExportExcel} style={secondaryButton}>
-                                        <Download size={16} style={{ color: 'var(--color-success)' }} />
-                                        Excel
-                                    </button>
-                                </>
-                            )}
+                            {visibleResults.length > 0 && exportButtons}
                         </div>
                     </div>
 
-                    <ResultsTable data={results} parties={resultParties} />
+                    <ResultsTable
+                        data={visibleResults}
+                        parties={resultParties}
+                        emptyMessage={results.length > 0 ? 'Seçili dosya türlerinde eşleşme yok. Dosya Türü filtresini değiştirin.' : undefined}
+                    />
+
+                    {visibleResults.length > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>{exportButtons}</div>
+                    )}
                 </div>
 
                 {/* Logs */}
@@ -553,7 +605,7 @@ export default function App() {
 
                 {isPdfModalOpen && (
                     <Suspense fallback={null}>
-                        <PdfExportModal isOpen onClose={() => setIsPdfModalOpen(false)} data={results} parties={resultParties} />
+                        <PdfExportModal isOpen onClose={() => setIsPdfModalOpen(false)} data={visibleResults} parties={resultParties} />
                     </Suspense>
                 )}
 
