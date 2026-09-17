@@ -84,7 +84,7 @@ export const DataInput: React.FC<DataInputProps> = ({
         triggerPasteAnimation();
         const newValue = party.text && party.text.trim().length > 0 ? `${party.text}\n${text}` : text;
         onTextChange(newValue);
-        if (count === 0) setViewMode('table');
+        setViewMode('table');
     };
 
     const handlePasteButton = async () => {
@@ -93,8 +93,7 @@ export const DataInput: React.FC<DataInputProps> = ({
             if (!text) return;
             appendData(text);
             setPasteMessage(null);
-            if (viewMode === 'raw' && textareaRef.current) textareaRef.current.focus();
-            else containerRef.current?.focus();
+            containerRef.current?.focus();
         } catch {
             if (viewMode === 'raw' && textareaRef.current) {
                 textareaRef.current.focus();
@@ -108,6 +107,11 @@ export const DataInput: React.FC<DataInputProps> = ({
     const handleManualPaste = (e: React.ClipboardEvent) => {
         if (viewMode === 'raw') {
             triggerPasteAnimation();
+            // Metin önce textarea'ya yapışsın, ardından tablo görünümüne geçilsin.
+            setTimeout(() => {
+                setViewMode('table');
+                containerRef.current?.focus();
+            }, 0);
             return;
         }
         e.preventDefault();

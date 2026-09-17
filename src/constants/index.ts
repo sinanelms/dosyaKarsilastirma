@@ -48,6 +48,12 @@ export const VALID_DOSYA_TURU = [
     'Denetimli Serbestlik Dosyası',
 ];
 
+/**
+ * Sonuç tablosu ve PDF raporda varsayılan olarak gösterilen dosya türü. UYAP'taki
+ * "CBS Sorusturma Dosyası", REPLACEMENTS ile bu ada çevrilir.
+ */
+export const DEFAULT_VISIBLE_DOSYA_TURU = ['Soruşturma Dosyası'];
+
 export const REPLACEMENTS: Record<string, Record<string, string>> = {
     'Birim Adı': { 'Cumhuriyet Başsavcılığı': 'CBS' },
     'Dosya Türü': {
@@ -69,7 +75,7 @@ export const KEYBOARD_SHORTCUTS = {
 // App metadata
 export const APP_INFO = {
     name: 'UYAP Dosya Karşılaştırma',
-    version: '1.1.1',
+    version: '1.1.2',
     description: 'Cumhuriyet Başsavcılığı Analiz Modülü',
 } as const;
 

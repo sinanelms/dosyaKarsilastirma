@@ -204,10 +204,10 @@ export function HelpDialog({ isOpen, onClose }: HelpDialogProps) {
                                 "En az N kişide ortak" seçicisiyle eşleşme koşulunu belirleyin
                             </li>
                             <li style={{ marginBottom: '0.5rem' }}>
-                                <strong>4.</strong> "Karşılaştır" butonuna tıklayın
+                                <strong>4.</strong> Kişi kartlarının altındaki "Karşılaştır" butonuna tıklayın
                             </li>
                             <li>
-                                <strong>5.</strong> Ortak dosyalar her kişinin sıfatıyla listelenir; PDF veya Excel olarak kaydedebilirsiniz
+                                <strong>5.</strong> Ortak dosyalar her kişinin sıfatıyla listelenir. Varsayılan olarak yalnız soruşturma dosyaları gösterilir; diğer türleri "Dosya Türü" filtresinden seçin. Tablonun üstünden veya altından PDF ya da Excel olarak kaydedebilirsiniz
                             </li>
                         </ol>
                     </section>

@@ -11,6 +11,8 @@ export type CaseRecord = Record<HeaderKey, string> & {
 export interface Party {
   id: string;
   name: string;
+  /** Kullanıcı adı elle değiştirdiyse true; Excel yüklenince ad otomatik doldurulmaz. */
+  nameEdited: boolean;
   /** Panodan yapıştırılan ham metin. */
   text: string;
   /** Metinden ayrıştırılan kayıtlar. */
