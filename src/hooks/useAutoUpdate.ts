@@ -22,6 +22,8 @@ interface UpdateState {
     error: string | null;
     /** Bildirim kartı kapatıldı; güncelleme bilgisi (ve başlıktaki Güncelle butonu) korunur. */
     notificationDismissed: boolean;
+    /** Uygulama içinden güncellenemedi; kullanıcıya sürümü tarayıcıdan indirme yolu gösterilir. */
+    browserFallback: boolean;
 }
 
 /*
@@ -35,8 +37,19 @@ let state: UpdateState = {
     downloadProgress: null,
     error: null,
     notificationDismissed: false,
+    browserFallback: false,
 };
 let pendingUpdate: Update | null = null;
+/** En son başarılı olan yol; sonraki kontrollerde önce o denenir (null: doğrudan bağlantı). */
+let workingProxy: string | null | undefined;
+
+/** tauri.conf.json'daki güncelleme adresiyle aynı; proxy bu adres için sorulur. */
+const UPDATE_ENDPOINT = 'https://github.com/sinanelms/dosyaKarsilastirma/releases/latest/download/latest.json';
+const RELEASES_PAGE = 'https://github.com/sinanelms/dosyaKarsilastirma/releases/latest';
+/** Kapalı bir ağda bağlantı denemesi uzun sürmesin diye her denemenin süre sınırı. */
+const CHECK_TIMEOUT_MS = 15_000;
+/** Başka bir ağ yolu denendiğinde sonucu değişebilecek (bağlantı kaynaklı) hatalar. */
+const CONNECTION_ERROR = /(dns|connect|network|timed? ?out|error sending request|proxy|status code)/i;
 let backgroundChecksScheduled = false;
 
 /** Uygulama uzun süre açık kalırsa yeni sürümün yine de fark edilmesi için arka plan kontrol aralığı. */
@@ -63,13 +76,71 @@ const errorMessage = (err: unknown, fallback: string) => {
         return 'Sunucuda yayınlanmış güncelleme bilgisi (latest.json) bulunamadı. Yeni sürüm henüz yayınlanmamış olabilir.';
     }
     if (/signature/i.test(message)) return 'Güncelleme dosyasının imzası doğrulanamadı; kurulum yapılmadı.';
-    if (/(dns|connect|network|timed? ?out|error sending request)/i.test(message)) {
-        return 'Güncelleme sunucusuna bağlanılamadı. İnternet bağlantınızı kontrol edin.';
+    if (CONNECTION_ERROR.test(message)) {
+        return 'Güncelleme sunucusuna bağlanılamadı (kurum proxy ayarı da denendi). Yeni sürümü tarayıcıdan indirebilirsiniz.';
     }
     return message;
 };
 
 export type CheckResult = 'available' | 'up-to-date' | 'error';
+
+/**
+ * Güncellemeyi sırayla farklı yollarla arar; biri bağlantı hatası verirse sonraki denenir:
+ *  1. Son başarılı yol (varsa)
+ *  2. Doğrudan (Windows'a elle girilmiş proxy varsa güncelleyici onu kullanır)
+ *  3. Windows proxy ayarlarından (PAC betiği / otomatik algılama) bulunan her proxy
+ * Seçilen proxy Update nesnesinde saklanır; indirme de aynı yoldan yapılır.
+ */
+const checkWithFallbacks = async (): Promise<Update | null> => {
+    const [{ check }, { invoke }] = await Promise.all([
+        import('@tauri-apps/plugin-updater'),
+        import('@tauri-apps/api/core'),
+    ]);
+
+    let lastError: unknown = new Error('Güncelleme kontrolü başarısız');
+    const tried = new Set<string | null>();
+    const tryRoute = async (proxy: string | null): Promise<{ update: Update | null } | null> => {
+        if (tried.has(proxy)) return null;
+        tried.add(proxy);
+        try {
+            const update = await check(proxy ? { proxy, timeout: CHECK_TIMEOUT_MS } : { timeout: CHECK_TIMEOUT_MS });
+            workingProxy = proxy;
+            return { update };
+        } catch (err) {
+            // İmza/format hataları bağlantı sorunu değildir; başka yol denemek sonucu değiştirmez.
+            if (!CONNECTION_ERROR.test(rawErrorMessage(err, ''))) throw err;
+            lastError = err;
+            return null;
+        }
+    };
+
+    const routes: Array<() => Promise<Array<string | null>>> = [
+        async () => (workingProxy === undefined ? [] : [workingProxy]),
+        async () => [null],
+        () => invoke<string[]>('resolve_update_proxies', { url: UPDATE_ENDPOINT }).catch(() => []),
+    ];
+    for (const route of routes) {
+        for (const proxy of await route()) {
+            const result = await tryRoute(proxy);
+            if (result) return result.update;
+        }
+    }
+    throw lastError;
+};
+
+/** Sürümler sayfasını varsayılan tarayıcıda açar (uygulama içinden güncelleme mümkün olmadığında). */
+export const openReleasesPage = async (): Promise<void> => {
+    if (!isTauri()) {
+        window.open(RELEASES_PAGE, '_blank', 'noopener');
+        return;
+    }
+    try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('open_releases_page');
+    } catch (err) {
+        setState({ error: rawErrorMessage(err, 'Tarayıcı açılamadı') });
+    }
+};
 
 /** Güncelleme var mı diye bakar. */
 export const checkForUpdates = async (): Promise<CheckResult> => {
@@ -81,10 +152,10 @@ export const checkForUpdates = async (): Promise<CheckResult> => {
 
     setState({ isChecking: true, error: null });
     try {
-        const { check } = await import('@tauri-apps/plugin-updater');
         const previousVersion = state.updateInfo?.available ? state.updateInfo.version : null;
-        pendingUpdate = await check();
+        pendingUpdate = await checkWithFallbacks();
         setState({
+            browserFallback: false,
             updateInfo: pendingUpdate
                 ? { version: pendingUpdate.version, date: pendingUpdate.date, body: pendingUpdate.body, available: true }
                 : { version: '', available: false },
@@ -93,7 +164,7 @@ export const checkForUpdates = async (): Promise<CheckResult> => {
         });
         return pendingUpdate ? 'available' : 'up-to-date';
     } catch (err) {
-        setState({ error: errorMessage(err, 'Güncelleme kontrolü başarısız') });
+        setState({ error: errorMessage(err, 'Güncelleme kontrolü başarısız'), browserFallback: true });
         return 'error';
     } finally {
         setState({ isChecking: false });
@@ -120,18 +191,18 @@ export const downloadAndInstall = async (): Promise<void> => {
         });
         await relaunch();
     } catch (err) {
-        setState({ error: errorMessage(err, 'Güncelleme indirilemedi'), isDownloading: false });
+        setState({ error: errorMessage(err, 'Güncelleme indirilemedi'), isDownloading: false, browserFallback: true });
     }
 };
 
 /** Bildirim kartını kapatır; güncelleme varsa başlıktaki Güncelle butonu görünmeye devam eder. */
-export const dismissUpdate = () => setState({ notificationDismissed: true, error: null });
+export const dismissUpdate = () => setState({ notificationDismissed: true, error: null, browserFallback: false });
 
 /** Arka plan kontrolü: ağ hatası kullanıcıya gösterilmez. */
 const silentCheck = () => {
     if (state.isDownloading) return;
     checkForUpdates().then((result) => {
-        if (result === 'error') setState({ error: null });
+        if (result === 'error') setState({ error: null, browserFallback: false });
     });
 };
 
@@ -145,5 +216,5 @@ export const useAutoUpdate = () => {
         setInterval(silentCheck, BACKGROUND_CHECK_INTERVAL_MS);
     }
 
-    return { ...snapshot, checkForUpdates, downloadAndInstall, dismissUpdate };
+    return { ...snapshot, checkForUpdates, downloadAndInstall, dismissUpdate, openReleasesPage };
 };
