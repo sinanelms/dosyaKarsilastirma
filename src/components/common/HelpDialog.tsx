@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     HelpCircle,
     X,
@@ -9,7 +9,11 @@ import {
     Moon,
     Sun,
     ClipboardPaste,
+    RefreshCcw,
+    ExternalLink,
 } from 'lucide-react';
+import { checkForUpdates, openReleasesPage } from '../../hooks/useAutoUpdate';
+import { isTauri } from '../../lib/tauri';
 
 interface HelpDialogProps {
     isOpen: boolean;
@@ -19,6 +23,20 @@ interface HelpDialogProps {
 export function HelpDialog({ isOpen, onClose }: HelpDialogProps) {
     const dialogRef = useRef<HTMLDivElement>(null);
     const closeButtonRef = useRef<HTMLButtonElement>(null);
+    const [updateStatus, setUpdateStatus] = useState<string | null>(null);
+
+    // Elle kontrol: bulunan güncelleme veya hata sağ üstteki bildirim kartında gösterilir.
+    const handleCheckUpdates = async () => {
+        setUpdateStatus('Kontrol ediliyor…');
+        const result = await checkForUpdates();
+        setUpdateStatus(
+            result === 'up-to-date'
+                ? 'Uygulama güncel.'
+                : result === 'available'
+                  ? 'Yeni sürüm bulundu.'
+                  : 'Kontrol edilemedi; sağ üstteki bildirime bakın.'
+        );
+    };
 
     // ESC tuşu ile kapat
     useEffect(() => {
@@ -335,9 +353,32 @@ export function HelpDialog({ isOpen, onClose }: HelpDialogProps) {
                         alignItems: 'center',
                     }}
                 >
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                        Versiyon 1.0.0
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                            Versiyon {__APP_VERSION__}
+                        </span>
+                        {isTauri() && (
+                            <button
+                                onClick={handleCheckUpdates}
+                                style={linkButtonStyle}
+                                title="GitHub'da yeni sürüm var mı bak"
+                            >
+                                <RefreshCcw size={12} />
+                                Güncellemeleri denetle
+                            </button>
+                        )}
+                        <button
+                            onClick={openReleasesPage}
+                            style={linkButtonStyle}
+                            title="Sürümler sayfasını tarayıcıda aç"
+                        >
+                            <ExternalLink size={12} />
+                            Sürümler sayfası
+                        </button>
+                        {updateStatus && (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{updateStatus}</span>
+                        )}
+                    </div>
                     <button
                         onClick={onClose}
                         style={{
@@ -358,3 +399,15 @@ export function HelpDialog({ isOpen, onClose }: HelpDialogProps) {
         </div>
     );
 }
+
+const linkButtonStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '0.25rem',
+    padding: 0,
+    background: 'none',
+    border: 'none',
+    fontSize: '0.75rem',
+    color: 'var(--color-primary)',
+    cursor: 'pointer',
+};

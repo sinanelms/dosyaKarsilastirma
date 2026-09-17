@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, X, RefreshCcw, Loader2 } from 'lucide-react';
+import { Download, X, RefreshCcw, Loader2, ExternalLink } from 'lucide-react';
 import { useAutoUpdate } from '../../hooks/useAutoUpdate';
 
 export const UpdateNotification: React.FC = () => {
@@ -13,6 +13,8 @@ export const UpdateNotification: React.FC = () => {
         downloadAndInstall,
         dismissUpdate,
         notificationDismissed,
+        browserFallback,
+        openReleasesPage,
     } = useAutoUpdate();
 
     // Kart yalnız yeni sürüm (kapatılmadıysa), indirme veya hata varken görünür; arka plandaki
@@ -202,13 +204,38 @@ export const UpdateNotification: React.FC = () => {
                     </button>
                 )}
 
+                {error && browserFallback && (
+                    <button
+                        onClick={openReleasesPage}
+                        title="Kurulum dosyasını tarayıcıdan indirin"
+                        style={{
+                            flex: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.5rem',
+                            padding: '0.625rem 1rem',
+                            backgroundColor: hasUpdate ? 'transparent' : 'var(--color-primary)',
+                            color: hasUpdate ? 'var(--text-secondary)' : 'white',
+                            border: hasUpdate ? '1px solid var(--border-secondary)' : 'none',
+                            borderRadius: 'var(--radius-md)',
+                            fontWeight: 600,
+                            fontSize: '0.8125rem',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        <ExternalLink size={16} />
+                        Tarayıcıda İndir
+                    </button>
+                )}
+
                 {error && (
                     <button
                         onClick={checkForUpdates}
                         disabled={isChecking}
                         title="Tekrar dene"
                         style={{
-                            flex: hasUpdate ? undefined : 1,
+                            flex: hasUpdate || browserFallback ? undefined : 1,
                             gap: '0.5rem',
                             display: 'flex',
                             alignItems: 'center',
@@ -222,7 +249,7 @@ export const UpdateNotification: React.FC = () => {
                         }}
                     >
                         <RefreshCcw size={16} className={isChecking ? 'animate-spin' : ''} />
-                        {!hasUpdate && 'Tekrar Dene'}
+                        {!hasUpdate && !browserFallback && 'Tekrar Dene'}
                     </button>
                 )}
             </div>
