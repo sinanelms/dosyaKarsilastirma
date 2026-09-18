@@ -44,4 +44,5 @@ jobs:
           releaseBody: 'Kurulum için aşağıdaki .exe (NSIS) veya .msi dosyasını indirin. Yüklü uygulamalar bu sürümü otomatik olarak bulur.'
           releaseDraft: true
           prerelease: false
-          includeUpdaterJson: true
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
