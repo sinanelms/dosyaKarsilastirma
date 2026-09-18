@@ -13,8 +13,8 @@
  * Aykırı Olarak Ele Geçirmek veya Yaymak"), bu yüzden suç listesi karar sayısına göre bölünür.
  */
 
-import type { HeaderKey } from '../types';
-import { compactLines } from './normalize';
+import type { CrimeBlock, HeaderKey, MatchRecord, Party } from '../types';
+import { compactLines, lowerTr } from './normalize';
 
 const splitLines = (value: string): string[] => (value ? value.split('\n') : []);
 
@@ -134,6 +134,94 @@ export const crimeEntries = (record: DecisionFields): CrimeEntry[] => {
     }
   }
   return entries;
+};
+
+/**
+ * Girdinin anlamsal alanları. Açık dosyanın satır satır biçimi ("Tehdit\nHakaret") ile kapalı
+ * dosyanın liste biçimi ("Tehdit, Hakaret") aynı değerleri üretir; bu yüzden karşılaştırma ham
+ * metinle değil bu alanlarla yapılır. Tarihler saatsiz güne indirilir.
+ */
+const entryFields = (entry: CrimeEntry): [string, string, string, string] => [
+  lowerTr(entry.crime.trim()),
+  formatUyapDate(entry.crimeDate),
+  lowerTr(entry.decision.trim()),
+  formatUyapDate(entry.decisionDate),
+];
+
+/**
+ * `less`, `more`'un daha az bilgi taşıyan hâli mi? Boş alan dolu alanı karşılar: aynı suça kararı
+ * yazılmamış bir çıktı, kararı yazılmış çıktının eksik hâlidir. Dolu alanlar birebir eşleşmelidir.
+ */
+const entryCoveredBy = (less: CrimeEntry, more: CrimeEntry): boolean => {
+  const [lc, ld, ldec, ldd] = entryFields(less);
+  const [mc, md, mdec, mdd] = entryFields(more);
+  return (!lc || lc === mc) && (!ld || ld === md) && (!ldec || ldec === mdec) && (!ldd || ldd === mdd);
+};
+
+/**
+ * `less` bloğunun her suç satırı, `more` bloğunun FARKLI bir satırıyla karşılanabiliyor mu?
+ * Eşleme birebirdir: aynı dosyada iki kez geçen suç iki ayrı olaydır, tek satırla karşılanmaz
+ * (bkz. UYAP iş kuralı). Küçük bloklar için iki taraflı eşleme (artırma yolu) yeterlidir.
+ */
+export const blockCoveredBy = (less: readonly CrimeEntry[], more: readonly CrimeEntry[]): boolean => {
+  if (less.length === 0) return true;
+  if (less.length > more.length) return false;
+
+  const assignedTo = new Array<number>(more.length).fill(-1);
+  const assign = (index: number, visited: boolean[]): boolean => {
+    for (let j = 0; j < more.length; j++) {
+      if (visited[j] || !entryCoveredBy(less[index], more[j])) continue;
+      visited[j] = true;
+      if (assignedTo[j] === -1 || assign(assignedTo[j], visited)) {
+        assignedTo[j] = index;
+        return true;
+      }
+    }
+    return false;
+  };
+  for (let i = 0; i < less.length; i++) {
+    if (!assign(i, new Array<boolean>(more.length).fill(false))) return false;
+  }
+  return true;
+};
+
+export interface AttributedCrimeEntry extends CrimeEntry {
+  /**
+   * Bu suç satırını bildiren kişilerin adları. Dosyada tek suç/karar bloğu kaldıysa boştur:
+   * bilgi tüm kişiler için aynıdır, etiketlemeye gerek yoktur.
+   */
+  partyNames: string[];
+}
+
+/**
+ * Excel ve PDF'te suç hücresinin metni. Kişiler aynı dosyada farklı suç bildiriyorsa satırın
+ * başına kimin bildirdiği yazılır: "[Ayşe] Hakaret". Tek blok kaldığında etiket eklenmez.
+ */
+export const crimeLabel = (entry: AttributedCrimeEntry): string =>
+  entry.partyNames.length > 0 ? `[${entry.partyNames.join(', ')}] ${entry.crime}` : entry.crime;
+
+/** Blokta bilgi var mı (yalnız hizalama için tutulan boş satırlar sayılmaz)? */
+export const blockHasEntries = (block: CrimeBlock): boolean => crimeEntries(block.values).length > 0;
+
+/**
+ * Dosyanın suç satırlarını, hangi kişiden geldiği bilgisiyle döndürür. Satır sırası ve sayısı
+ * `crimeEntries(match)` ile birebir aynıdır: hizalı sütunlar blokların uç uca eklenmesiyle kurulur.
+ */
+export const attributedCrimeEntries = (
+  match: MatchRecord,
+  parties: readonly Pick<Party, 'id' | 'name'>[]
+): AttributedCrimeEntry[] => {
+  const blocks = match.crimeBlocks ?? [];
+  // Blok bilgisi taşımayan kayıtlarda (elle kurulan kayıtlar, eski çıktılar) dosya düzeyindeki
+  // hizalı sütunlar tek blok sayılır; etiketsiz, bugünkü davranışla aynı.
+  if (blocks.length === 0) return crimeEntries(match).map((entry) => ({ ...entry, partyNames: [] }));
+
+  const labelled = blocks.filter(blockHasEntries).length > 1;
+  const nameOf = new Map(parties.map((p) => [p.id, p.name]));
+  return blocks.flatMap((block) => {
+    const partyNames = labelled ? block.partyIds.map((id) => nameOf.get(id) ?? '').filter(Boolean) : [];
+    return crimeEntries(block.values).map((entry) => ({ ...entry, partyNames }));
+  });
 };
 
 const DATE_COLUMNS: readonly string[] = ['Suç Tarihi', 'Kesinleşme Tarihi'];

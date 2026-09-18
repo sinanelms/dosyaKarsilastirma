@@ -1,5 +1,5 @@
 import type { HeaderKey, MatchRecord, Party } from '../types';
-import { crimeEntries, exportValue, type CrimeEntry } from './decision';
+import { attributedCrimeEntries, crimeLabel, exportValue, type AttributedCrimeEntry } from './decision';
 
 export type PdfFontFamily = 'NotoSans' | 'NotoSerif' | 'Roboto';
 export type PdfOrientation = 'landscape' | 'portrait';
@@ -114,9 +114,9 @@ export interface ReportRow {
 
 const UNALIGNED_NOTE = '(Karar eşleştirilemedi)';
 
-const crimeCellText = (column: HeaderKey, entry: CrimeEntry | null): string => {
+const crimeCellText = (column: HeaderKey, entry: AttributedCrimeEntry | null): string => {
   if (!entry) return '';
-  if (column === 'Suçu') return entry.crime;
+  if (column === 'Suçu') return crimeLabel(entry);
   if (column === 'Suç Tarihi') return entry.crimeDate;
   if (column === 'Karar Türü') return entry.decision;
   return entry.decisionDate;
@@ -140,8 +140,8 @@ export const buildReportRows = (
 
   matches.forEach((match, i) => {
     const group = startIndex + i;
-    const entries = hasCrimeColumns ? crimeEntries(match) : [];
-    const lines: (CrimeEntry | null)[] = entries.length > 0 ? entries : [null];
+    const entries = hasCrimeColumns ? attributedCrimeEntries(match, parties) : [];
+    const lines: (AttributedCrimeEntry | null)[] = entries.length > 0 ? entries : [null];
     const roles: PartyRole[] = parties.map((p) => ({ name: p.name, role: match.roles[p.id] ?? null }));
     const partyText = roles.map(({ name, role }) => `${name}: ${role === null ? '—' : role || 'Belirtilmemiş'}`).join('\n');
 
@@ -168,4 +168,33 @@ export const buildReportRows = (
     }
   });
   return rows;
+};
+
+/** Suç sütununun hücrelerindeki metin satırları; sütunu içeriğe göre daraltmak için ölçülür. */
+export const crimeColumnLines = (
+  matches: readonly MatchRecord[],
+  parties: readonly Pick<Party, 'id' | 'name'>[],
+  column: HeaderKey
+): string[] =>
+  matches.flatMap((match) =>
+    attributedCrimeEntries(match, parties).flatMap((entry) => {
+      const text = crimeCellText(column, entry);
+      const unaligned = column === 'Suçu' && !entry.aligned && !!entry.crime;
+      return unaligned ? [text, UNALIGNED_NOTE] : [text];
+    })
+  );
+
+/**
+ * Sütunu içeriğine göre daraltır: en geniş satır + iç boşluk. Üst sınır (sütunun kendiliğinden
+ * alacağı genişlik) aşılmaz; içerik dar kalırsa artan genişlik diğer sütunlara kalır.
+ */
+export const fitColumnWidth = (
+  lines: readonly string[],
+  measure: (line: string) => number,
+  cellPadding: number,
+  maxWidth: number
+): number => {
+  const widest = lines.reduce((max, line) => Math.max(max, measure(line)), 0);
+  // 0.2 mm: ölçüm ile çizim arasındaki yuvarlama farkı metni gereksiz yere alt satıra atmasın.
+  return Math.min(maxWidth, widest + 2 * cellPadding + 0.2);
 };

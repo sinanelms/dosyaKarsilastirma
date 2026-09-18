@@ -26,7 +26,8 @@ describe('compareParties', () => {
     expect(result).toHaveLength(1);
     expect(result[0].roles).toEqual({ a: 'Şüpheli', b: 'Müşteki' });
     expect(result[0].partyCount).toBe(2);
-    expect(result[0]['Suçu']).toBe('Silahla Tehdit');
+    // Kişiler farklı suç bildiriyor; biri seçilip diğeri atılmaz (bkz. crimeBlocks.test.ts).
+    expect(result[0]['Suçu']).toBe('Tehdit\nSilahla Tehdit');
   });
 
   it('3 kişide minCount=2 iken ikili ortakları listeler, dosyada olmayan kişi null olur', () => {

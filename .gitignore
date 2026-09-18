@@ -37,3 +37,9 @@ docs/
 deneme/
 *.xlsx
 *.xls
+
+# Tarayıcı otomasyonu çıktıları: sayfa anlık görüntüleri gerçek kişi verisi içerir
+.playwright-mcp/
+
+# Yerel ajan/beceri tanımları yalnız yerelde tutulur
+.agents/

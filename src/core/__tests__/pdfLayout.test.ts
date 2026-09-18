@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildReportRows, buildTableHead, chunkRanges, DEFAULT_PDF_OPTIONS, sanitizePdfOptions, type ReportRow } from '../pdfLayout';
+import { buildReportRows, buildTableHead, chunkRanges, crimeColumnLines, DEFAULT_PDF_OPTIONS, fitColumnWidth, sanitizePdfOptions, type ReportRow } from '../pdfLayout';
 import { FIXED_HEADERS } from '../../constants';
 import type { HeaderKey, MatchRecord } from '../../types';
 import { compareParties } from '../compare';
@@ -60,6 +60,7 @@ describe('buildReportRows: suç bazında satırlar', () => {
     ...values,
     _key: values['Dosya No'] ?? '',
     roles: { a: 'Şüpheli', b: 'Müşteki' },
+    crimeBlocks: [],
     partyCount: 2,
   });
   const parties = [
@@ -133,5 +134,33 @@ describe('sanitizePdfOptions', () => {
     expect(o.fontSize).toBe(16);
     expect(o.rowsPerPage).toBe(0);
     expect(o.margins).toEqual({ top: 0, right: 60, bottom: 10, left: 0 });
+  });
+});
+
+describe('fitColumnWidth', () => {
+  const measure = (line: string) => line.length; // 1 birim = 1 karakter
+
+  it('sütunu en geniş satıra göre daraltır', () => {
+    expect(fitColumnWidth(['Tehdit', 'Kasten Yaralama'], measure, 2, 100)).toBeCloseTo(15 + 4 + 0.2);
+  });
+
+  it('üst sınırı aşmaz', () => {
+    expect(fitColumnWidth(['çok çok uzun bir suç adı'], measure, 2, 10)).toBe(10);
+  });
+
+  it('içerik yoksa yalnız iç boşluk kadar yer kaplar', () => {
+    expect(fitColumnWidth([], measure, 2, 100)).toBeCloseTo(4.2);
+  });
+});
+
+describe('crimeColumnLines', () => {
+  it('suç metinlerini ve eşleşmeyen kayıtların uyarı satırını döndürür', () => {
+    const parties = [
+      { id: 'a', name: 'Ali', records: rowsToRecords([['Dosya No', 'Sıfatı', 'Suçu', 'Karar Türü'], ['2024/1', 'Şüpheli', 'Tehdit,Hakaret', 'Dava Açma']]) },
+      { id: 'b', name: 'Veli', records: rowsToRecords([['Dosya No', 'Sıfatı', 'Suçu', 'Karar Türü'], ['2024/1', 'Müşteki', 'Tehdit,Hakaret', 'Dava Açma']]) },
+    ];
+    const lines = crimeColumnLines(compareParties(parties, 2), parties, 'Suçu');
+    expect(lines.some((line) => line.includes('Tehdit'))).toBe(true);
+    expect(lines.some((line) => line.includes('Hakaret'))).toBe(true);
   });
 });

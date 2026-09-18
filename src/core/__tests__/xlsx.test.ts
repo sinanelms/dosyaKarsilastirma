@@ -54,10 +54,10 @@ describe('readXlsxRows', () => {
   it('Excel yükleme ile Excel den kopyala-yapıştır aynı kayıtları üretir (birleştirilmiş hücreler)', () => {
     const aoa = [
       ['Birim Adı', 'Dosya Durumu', 'Dosya Türü', 'Dosya No', 'Sıfatı', 'Suçu', 'Karar Türü', 'Kesinleşme Tarihi', 'Açıklama'],
-      ['Kahramanmaraş CBS', 'Açık', 'CBS Sorusturma Dosyası', '2024/17284', 'Müşteki Şüpheli', 'Hakaret', null, null, null],
+      ['Ankara CBS', 'Açık', 'CBS Sorusturma Dosyası', '2024/4', 'Müşteki Şüpheli', 'Hakaret', null, null, null],
       [null, null, null, null, null, 'Hakaret', 'Ek-Takipsizlik', '2024-08-01 00:00:00.0', null],
       [null, null, null, null, null, 'Tehdit', null, null, null],
-      ['Kahramanmaraş CBS', 'Açık', 'CBS Sorusturma Dosyası', '2024/27527', 'Müşteki Şüpheli', 'Basit Yaralama', null, null, null],
+      ['Ankara CBS', 'Açık', 'CBS Sorusturma Dosyası', '2024/6', 'Müşteki Şüpheli', 'Basit Yaralama', null, null, null],
     ];
     const wb = XLSX.utils.book_new();
     const sheet = XLSX.utils.aoa_to_sheet(aoa);

@@ -66,6 +66,7 @@ describe('renderPdf', () => {
       _key: '2020/1',
       roles: { a: 'Şüpheli', b: null },
       partyCount: 1,
+      crimeBlocks: [],
     };
     const warnings: string[] = [];
     const log = vi.spyOn(console, 'log').mockImplementation((message: unknown) => void warnings.push(String(message)));
