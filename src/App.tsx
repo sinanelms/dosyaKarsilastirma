@@ -122,12 +122,24 @@ export default function App() {
         setHasCompared(false);
     }, []);
 
+    /**
+     * Kişi verisi değiştiğinde eski sonuç artık o veriyi göstermez: tabloda kalması ve Excel/PDF'e
+     * aktarılabilmesi, silinmiş ya da değiştirilmiş veriyi güncelmiş gibi raporlar. Bu yüzden veri
+     * değişir değişmez sonuç düşürülür ve kullanıcıya yeniden karşılaştırması gerektiği söylenir.
+     */
+    const invalidateOnDataChange = () => {
+        if (results.length === 0 && !hasCompared) return;
+        invalidateResults();
+        addLog('Veri değiştiği için önceki karşılaştırma sonuçları temizlendi. Yeniden karşılaştırın.', 'WARN');
+    };
+
     useEffect(() => {
         const timers = parseTimers.current;
         return () => timers.forEach((timer) => clearTimeout(timer));
     }, []);
 
     const handleTextChange = (party: Party, text: string) => {
+        invalidateOnDataChange();
         updateParty(party.id, (p) => ({ ...p, text }));
 
         // Ayrıştırma, yazma/yapıştırma bittikten sonra (debounce) yapılır; büyük metinlerde arayüz donmaz.
@@ -145,6 +157,7 @@ export default function App() {
     };
 
     const handleFiles = async (party: Party, files: File[]) => {
+        invalidateOnDataChange();
         setLoadingPartyIds((prev) => [...prev, party.id]);
         try {
             for (const file of files) {
@@ -174,6 +187,7 @@ export default function App() {
     };
 
     const handleClearParty = (id: string) => {
+        invalidateOnDataChange();
         clearTimeout(parseTimers.current.get(id));
         updateParty(id, (p) => withRecords(p, { text: '', textRecords: [], fileRecords: [], fileNames: [] }));
     };

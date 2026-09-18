@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
 import { FIXED_HEADERS } from '../constants';
-import type { MatchRecord, Party } from '../types';
-import { exportValue } from './decision';
+import type { HeaderKey, MatchRecord, Party } from '../types';
+import { attributedCrimeEntries, crimeLabel, exportValue } from './decision';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -56,6 +56,25 @@ export const readXlsxRows = (data: ArrayBuffer): string[][] => {
   return texts;
 };
 
+/**
+ * Kişiler aynı dosyada farklı suç/karar bildiriyorsa suç sütunları satır satır yazılır ve her
+ * satırın başına kimin bildirdiği eklenir; böylece suç, karar ve tarih aynı hizada kalır.
+ * Tek blok kaldığında (kayıtların çoğunda) hücreler bugünkü biçimiyle üretilir.
+ */
+const labelledCrimeCells = (
+  match: MatchRecord,
+  parties: readonly Pick<Party, 'id' | 'name'>[]
+): Partial<Record<HeaderKey, string>> => {
+  const entries = attributedCrimeEntries(match, parties);
+  if (!entries.some((entry) => entry.partyNames.length > 0)) return {};
+  return {
+    'Suçu': entries.map(crimeLabel).join('\n'),
+    'Suç Tarihi': entries.map((entry) => entry.crimeDate).join('\n'),
+    'Karar Türü': entries.map((entry) => entry.decision).join('\n'),
+    'Kesinleşme Tarihi': entries.map((entry) => entry.decisionDate).join('\n'),
+  };
+};
+
 /** Sonuçları (kişi sıfat sütunları + tüm UYAP sütunları) .xlsx olarak üretir. */
 export const buildResultsWorkbook = (
   matches: readonly MatchRecord[],
@@ -63,11 +82,14 @@ export const buildResultsWorkbook = (
 ): ArrayBuffer => {
   const detailHeaders = FIXED_HEADERS.filter((h) => h !== 'Sıfatı');
   const header = ['#', ...parties.map((p) => `${p.name} - Sıfatı`), ...detailHeaders];
-  const body = matches.map((match, index) => [
-    String(index + 1),
-    ...parties.map((p) => (match.roles[p.id] === null ? '—' : match.roles[p.id] || 'Belirtilmemiş')),
-    ...detailHeaders.map((h) => exportValue(h, match[h])),
-  ]);
+  const body = matches.map((match, index) => {
+    const labelled = labelledCrimeCells(match, parties);
+    return [
+      String(index + 1),
+      ...parties.map((p) => (match.roles[p.id] === null ? '—' : match.roles[p.id] || 'Belirtilmemiş')),
+      ...detailHeaders.map((h) => labelled[h] ?? exportValue(h, match[h])),
+    ];
+  });
 
   const sheet = XLSX.utils.aoa_to_sheet([header, ...body]);
   sheet['!cols'] = header.map((h) => ({ wch: Math.min(40, Math.max(8, h.length + 2)) }));

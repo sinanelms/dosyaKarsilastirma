@@ -3,7 +3,7 @@ import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import { AlertCircle, CalendarDays, CheckCircle2, Clock, FileText, Gavel, Landmark, Scale, Users, XCircle } from 'lucide-react';
 import type { MatchRecord, Party } from '../types';
 import { partyColor } from '../core/party';
-import { crimeEntries, parseAciklama } from '../core/decision';
+import { attributedCrimeEntries, parseAciklama } from '../core/decision';
 import { roleTone, statusTone, type Tone } from '../core/tone';
 
 interface ResultsTableProps {
@@ -91,7 +91,8 @@ const ResultRow = React.memo(function ResultRow({
     measureRef: (el: HTMLTableRowElement | null) => void;
 }) {
     const cellBorder = '1px solid var(--border-primary)';
-    const entries = crimeEntries(row);
+    const entries = attributedCrimeEntries(row, parties);
+    const accentOf = new Map(parties.map((p) => [p.name, partyColor(p).accent]));
     const courts = parseAciklama(row['Açıklama']);
     const lawsuit = courts.find((ref) => ref.caseNo);
     return (
@@ -194,6 +195,29 @@ const ResultRow = React.memo(function ResultRow({
                             title={entry.aligned ? undefined : 'Suç listesi karar listesiyle eşleştirilemedi; suç ve karar yan yana olmayabilir.'}
                         >
                             <div style={{ ...crimeCellStyle, borderRight: cellBorder, color: 'var(--text-primary)', fontWeight: 500 }}>
+                                {/* Kişiler bu dosyada farklı suç bildiriyorsa satırın kaynağı gösterilir. */}
+                                {entry.partyNames.length > 0 && (
+                                    <span
+                                        title="Bu suç ve karar bilgisi yalnız bu kişinin çıktısında var."
+                                        style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginBottom: '0.1875rem' }}
+                                    >
+                                        {entry.partyNames.map((name) => (
+                                            <span
+                                                key={name}
+                                                style={{
+                                                    ...badgeStyle,
+                                                    fontWeight: 700,
+                                                    letterSpacing: '-0.025em',
+                                                    color: accentOf.get(name) ?? 'var(--text-secondary)',
+                                                    borderColor: accentOf.get(name) ?? 'var(--border-primary)',
+                                                    backgroundColor: 'var(--bg-secondary)',
+                                                }}
+                                            >
+                                                {name}
+                                            </span>
+                                        ))}
+                                    </span>
+                                )}
                                 {entry.crime || emptyValue}
                                 {!entry.aligned && i === 0 && (
                                     <span style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 400, color: 'var(--color-warning)' }}>Karar eşleştirilemedi</span>

@@ -151,8 +151,8 @@ describe('parseAciklama', () => {
   });
 
   it('parantezli birim adlarını bozmaz', () => {
-    expect(parseAciklama('Kahramanmaraş(Kapatılan) 1. Sulh Ceza Mahkemesi(2011/894),Yargıtaydan Döndü')).toEqual([
-      { court: 'Kahramanmaraş(Kapatılan) 1. Sulh Ceza Mahkemesi', caseNo: '2011/894', status: 'Yargıtaydan Döndü' },
+    expect(parseAciklama('Ankara(Kapatılan) 1. Sulh Ceza Mahkemesi(2023/12),Yargıtaydan Döndü')).toEqual([
+      { court: 'Ankara(Kapatılan) 1. Sulh Ceza Mahkemesi', caseNo: '2023/12', status: 'Yargıtaydan Döndü' },
     ]);
   });
 

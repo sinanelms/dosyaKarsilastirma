@@ -23,8 +23,8 @@ const detectHeader = (cells: string[]): (HeaderKey | null)[] | null => {
 const POSITIONAL_MAPPING: (HeaderKey | null)[] = [...FIXED_HEADERS];
 
 /**
- * Başlıksız UYAP çıktılarında sütun sayısına göre bilinen düzenler. (deneme/ klasöründeki
- * örneklerde görülen, sayfa ayarına göre bazı boş sütunları atılmış çıktılar.)
+ * Başlıksız UYAP çıktılarında sütun sayısına göre bilinen düzenler. (Sayfa ayarına göre
+ * bazı boş sütunları atılmış çıktılarda görülür.)
  */
 const LAYOUTS_BY_WIDTH: Record<number, HeaderKey[]> = {
   9: ['Birim Adı', 'Dosya Durumu', 'Dosya Türü', 'Dosya No', 'Sıfatı', 'Suçu', 'Karar Türü', 'Kesinleşme Tarihi', 'Açıklama'],

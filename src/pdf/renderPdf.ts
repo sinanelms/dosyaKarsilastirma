@@ -5,6 +5,8 @@ import {
   buildReportRows,
   buildTableHead,
   chunkRanges,
+  crimeColumnLines,
+  fitColumnWidth,
   sanitizePdfOptions,
   type PdfOptions,
   type ReportCell,
@@ -103,6 +105,21 @@ export const renderPdf = ({ matches, parties, options: rawOptions, font, generat
     head[0].flatMap((title, index) => (MIN_WIDTH_EM[title] ? [[index, { minCellWidth: MIN_WIDTH_EM[title]! * em + options.cellPadding * 2 }]] : []))
   );
 
+  // Suç adları çoğu dosyada kısadır; sütun içeriğe göre daralır, artan genişlik Açıklama gibi uzun
+  // sütunlara kalır. Üst sınır sütunun kendiliğinden aldığı genişliktir (tablo genişliğinin ~1/4'ü).
+  const CRIME_COLUMN_MAX_RATIO = 0.24;
+  const crimeColumnIndex = head[0].indexOf('Suçu');
+  const crimeColumnStyle = (() => {
+    if (crimeColumnIndex < 0) return {};
+    doc.setFont(fontFamily, 'bold');
+    doc.setFontSize(options.fontSize);
+    const headerWidth = doc.getTextWidth('Suçu');
+    doc.setFont(fontFamily, 'normal');
+    const lines = crimeColumnLines(matches, parties, 'Suçu');
+    const width = fitColumnWidth(lines, (line) => doc.getTextWidth(line), options.cellPadding, contentWidth * CRIME_COLUMN_MAX_RATIO);
+    return { [crimeColumnIndex]: { cellWidth: Math.max(width, headerWidth + 2 * options.cellPadding) } };
+  })();
+
   // Birleştirilmiş hücre sayfadan uzun olursa jspdf-autotable onu bölemez; bir blok, suç satırları
   // en fazla üç satıra sarsa bile boş bir sayfaya sığacak sayıda suçla sınırlanır.
   const lineHeight = options.fontSize * 0.3528 * 1.15;
@@ -144,11 +161,13 @@ export const renderPdf = ({ matches, parties, options: rawOptions, font, generat
         lineColor: GRID_LINE_COLOR,
         lineWidth: 0.15,
       },
-      headStyles: { fontStyle: 'bold', fillColor: [241, 245, 249], textColor: 0, valign: 'middle', lineColor: GROUP_LINE_COLOR },
+      headStyles: { fontStyle: 'bold', fillColor: [241, 245, 249], textColor: 0, halign: 'center', valign: 'middle', lineColor: GROUP_LINE_COLOR },
       columnStyles: {
-        0: { halign: 'center', cellWidth: Math.max(7, options.fontSize * 1.3) },
+        // Sıra no sütunu: başlık ve numara hücrenin (birleştirilmiş satırlar dahil) ortasında.
+        0: { halign: 'center', valign: 'middle', cellWidth: Math.max(7, options.fontSize * 1.3) },
         1: { cellWidth: partyColumnWidth },
         ...minColumnWidths,
+        ...crimeColumnStyle,
       },
       didParseCell: (data) => {
         if (data.section !== 'body') return;
