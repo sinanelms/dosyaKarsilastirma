@@ -1,6 +1,6 @@
 [package]
 name = "uyap-dosya-karsilastirma"
-version = "1.2.1"
+version = "1.2.2"
 description = "UYAP Dosya Karşılaştırma - Cumhuriyet Başsavcılığı Analiz Modülü"
 authors = ["Sinan Elmas"]
 edition = "2021"
