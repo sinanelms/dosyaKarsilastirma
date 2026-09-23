@@ -53,6 +53,10 @@ export const DataInput: React.FC<DataInputProps> = ({
     const [isFocused, setIsFocused] = useState(false);
     const [justPasted, setJustPasted] = useState(false);
     const [isDragOver, setIsDragOver] = useState(false);
+    const [isNameFocused, setIsNameFocused] = useState(false);
+
+    // Varsayılan "N. Kişi" adı odaklanınca gizlenir; kullanıcı yazmadan çıkarsa ad değişmez.
+    const hideDefaultName = isNameFocused && !party.nameEdited && /^\d+\. Kişi$/.test(party.name);
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -279,8 +283,10 @@ export const DataInput: React.FC<DataInputProps> = ({
                     >
                         <input
                             type="text"
-                            value={party.name}
+                            value={hideDefaultName ? '' : party.name}
                             onChange={(e) => onNameChange(e.target.value)}
+                            onFocus={() => setIsNameFocused(true)}
+                            onBlur={() => setIsNameFocused(false)}
                             aria-label="Kişi adı"
                             style={{
                                 backgroundColor: 'transparent',
@@ -291,7 +297,7 @@ export const DataInput: React.FC<DataInputProps> = ({
                                 width: '100%',
                                 color: 'var(--text-primary)',
                             }}
-                            placeholder="İsim Giriniz"
+                            placeholder={hideDefaultName ? party.name : 'İsim Giriniz'}
                         />
                     </div>
                     <span
