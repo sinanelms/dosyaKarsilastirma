@@ -203,8 +203,10 @@ export const renderPdf = ({ matches, parties, options: rawOptions, font, generat
         const { x, y, width, height } = data.cell;
         const innerWidth = width - 2 * options.cellPadding;
         if (cell.kind === 'party' && cell.roles) {
+          // Suç satırları hücreyi uzattığında altta boşluk kalmasın diye kişiler dikey ortalanır.
           const layout = layoutPartyCell(doc, cell.roles, innerWidth, badgeFont);
-          drawCellLayout(doc, layout, x + options.cellPadding, y + options.cellPadding, innerWidth, badgeFont);
+          const offsetY = Math.max(0, (height - 2 * options.cellPadding - layout.height) / 2);
+          drawCellLayout(doc, layout, x + options.cellPadding, y + options.cellPadding + offsetY, innerWidth, badgeFont);
         } else if (cell.kind === 'status') {
           // Etiketler hücrenin (birleştirilmiş satırlar dahil) yatay ve dikey ortasına çizilir.
           const layout = layoutStatusCell(doc, cell.text, innerWidth, badgeFont);
